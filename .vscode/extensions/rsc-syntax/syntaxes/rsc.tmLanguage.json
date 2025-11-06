@@ -1,0 +1,133 @@
+{
+    "name": "RSC Script (Casio Compiler)",
+    "scopeName": "source.rsc",
+    "fileTypes": [
+        "rsc"
+    ],
+    "patterns": [
+        {
+            "name": "comment.line.semicolon.rsc",
+            "match": "#.*$"
+        },
+        {
+            "name": "comment.line.hash.rsc",
+            "match": "#.*$"
+        },
+        {
+            "name": "comment.line.double-slash.rsc",
+            "match": "//.*$"
+        },
+        {
+            "name": "comment.block.rsc",
+            "begin": "/\\*",
+            "end": "\\*/"
+        },
+        {
+            "name": "string.quoted.double.rsc",
+            "begin": "\"",
+            "end": "\"",
+            "patterns": [
+                {
+                    "name": "constant.character.escape.rsc",
+                    "match": "\\\\."
+                },
+                {
+                    "name": "variable.parameter.rsc",
+                    "match": "\\{.*?\\}"
+                }
+            ]
+        },
+        {
+            "name": "storage.modifier.rsc",
+            "match": "\\b(lbl|func|import)\\b"
+        },
+        {
+            "name": "storage.type.rsc",
+            "match": "\\b(int|str|rel|reg|var)\\b"
+        },
+        {
+            "name": "keyword.control.rsc",
+            "match": "\\b(call|goto|eval|org|pr_length|end|if|then|else)\\b"
+        },
+        {
+            "name": "support.function.rsc",
+            "match": "\\badr\\b"
+        },
+        {
+            "name": "keyword.control.hex.rsc",
+            "match": "\\bhex\\b"
+        },
+        {
+            "name": "constant.numeric.hex.inline.rsc",
+            "begin": "(?<=\\bhex\\s+)",
+            "end": "(?=\\s|$|,|\\)|;)",
+            "patterns": [
+                {
+                    "name": "constant.numeric.hex.rsc",
+                    "match": "[0-9a-fA-F]+"
+                }
+            ]
+        },
+        {
+            "name": "entity.name.function.definition.rsc",
+            "match": "(?<=\\bfunc\\s)[a-zA-Z_][a-zA-Z0-9_]*"
+        },
+        {
+            "name": "entity.name.label.definition.rsc",
+            "match": "(?<=\\blbl\\s)[a-zA-Z_][a-zA-Z0-9_]*(?=:)"
+        },
+        {
+            "name": "entity.name.import.rsc",
+            "match": "(?<=\\bimport\\s)[a-zA-Z_][a-zA-Z0-9_]*"
+        },
+        {
+            "name": "variable.declaration.rsc",
+            "match": "(?<=\\b(int|str|rel|reg|var)\\s)[a-zA-Z_][a-zA-Z0-9_]*"
+        },
+        {
+            "name": "variable.other.register.rsc",
+            "match": "\\b(r[0-9]|er[0-9]|er1[0-4]|xr[0-9]|xr1[0-4]|qr[0-9]|qr1[0-4]|sp|pc)\\b"
+        },
+        {
+            "name": "constant.other.key.rsc",
+            "match": "\\bKEY_[A-Z0-9_]+\\b"
+        },
+        {
+            "name": "constant.numeric.hex.rsc",
+            "match": "\\b0x[0-9a-fA-F]+\\b"
+        },
+        {
+            "name": "constant.numeric.decimal.rsc",
+            "match": "\\b\\d+\\b"
+        },
+        {
+            "name": "keyword.operator.assignment.rsc",
+            "match": "="
+        },
+        {
+            "name": "punctuation.separator.rsc",
+            "match": ",|;"
+        },
+        {
+            "name": "punctuation.definition.parameters.rsc",
+            "match": "\\(|\\)|\\[|\\]"
+        },
+        {
+            "name": "punctuation.section.block.rsc",
+            "match": "\\{|\\}"
+        },
+        {
+            "name": "punctuation.definition.label.rsc",
+            "match": ":"
+        },
+        {
+            "name": "entity.name.function.call.rsc",
+            "match": "(?<=\\bcall\\s)[a-zA-Z_][a-zA-Z0-9_]*"
+        },
+        {
+            "name": "entity.name.label.reference.rsc",
+            "match": "(?<=\\bgoto\\s)[a-zA-Z_][a-zA-Z0-9_]*"
+        }
+    ],
+    "repository": {}
+}

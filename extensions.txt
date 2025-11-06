@@ -1,0 +1,90 @@
+---syntax---
+line_print({x},{y},{addr})
+---output---
+xr0 = {x}, {y}, {addr}
+line_print
+---
+
+---syntax---
+setup_loop({src},{backup},{label})
+---output---
+lbl 726573746F7265
+    setlr
+    DI,RT
+    xr0 = adr(6C656E677468), 0x01, 0x00
+    [er0] = er2,rt
+    qr0 = pr_length, {backup}, {src}, 0x0000
+    0x8932
+lbl 6C656E677468
+    0x0800
+    0x0000
+lbl 7365745F7370
+    er6 = eval(adr({label}) - 0x2)
+    sp = er6,pop er8
+---
+
+---syntax---
+print({string})
+---output---
+xr0 = 0x01, 0x01, adr(74657874)
+printline
+lbl 74657874
+    0x0000
+    str {string}
+---
+
+---syntax---
+clear()
+---output---
+buffer_clear
+render.ddd4
+---
+
+---syntax---
+delay({value})
+---output---
+er0 = {value}
+delay
+---
+
+---syntax---
+render()
+---output---
+render.ddd4
+---
+
+---syntax---
+reset_sfr
+---output---
+setsfr
+---
+
+---syntax---
+{label}:
+---output---
+lbl {label}
+---
+
+---syntax---
+adr_of {label}
+---output---
+adr({label})
+---
+
+---syntax---
+adr_prev({label}, {offset})
+---output---
+eval(adr({label}) - {offset})
+---
+
+---syntax---
+adr_diff({label}, {label2})
+---output---
+eval(adr({label}) - adr({label2}))
+---
+
+---syntax---
+jcin
+---output---
+hex 2a 9c 90 2e 50 3b b1 2a 0e 40 52 8e fa 8b b0 ca 7e d6 11 64
+---
