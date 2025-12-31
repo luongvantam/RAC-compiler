@@ -1,0 +1,34 @@
+{
+    "name": "rsc-syntax",
+    "displayName": "RSC Syntax Highlight",
+    "description": "Syntax highlighting for custom RSC scripts",
+    "version": "0.0.1",
+    "publisher": "luongvantam",
+    "engines": {
+        "vscode": "^1.80.0"
+    },
+    "categories": [
+        "Programming Languages"
+    ],
+    "contributes": {
+        "languages": [
+            {
+                "id": "rsc",
+                "aliases": [
+                    "RSC",
+                    "rsc"
+                ],
+                "extensions": [
+                    ".rsc"
+                ]
+            }
+        ],
+        "grammars": [
+            {
+                "language": "rsc",
+                "scopeName": "source.rsc",
+                "path": "./syntaxes/rsc.tmLanguage.json"
+            }
+        ]
+    }
+}
