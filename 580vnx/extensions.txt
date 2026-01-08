@@ -30,6 +30,13 @@ render.ddd4
 ---
 
 ---syntax---
+clear()
+---logic---
+---output---
+buffer_clear
+---
+
+---syntax---
 render()
 ---logic---
 ---output---
@@ -52,7 +59,7 @@ smallprint
 ---
 
 ---syntax---
-render_bitmap({x}, {y}, {w}, {h}, {addr_bitmap})
+render_bitmap({x},{y},{w},{h},{addr_bitmap})
 ---logic---
 ---output---
 xr0 = {x}, {y}, {w}, {h}
@@ -61,7 +68,7 @@ er0 = {addr_bitmap}
 ---
 
 ---syntax---
-line_draw({x1}, {y1}, {x2}, {y2})
+line_draw({x1},{y1},{x2},{y2})
 ---logic---
 ---output---
 xr0 = {x1}, {y1}, {x2}, {y2}
