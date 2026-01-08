@@ -12,7 +12,7 @@ print({string})
 import random, string
 letters = string.ascii_uppercase + string.digits
 rand_suffix = ''.join(random.choice(letters) for _ in range(4))
-lbl_name = f"STR_{rand_suffix}
+lbl_name = f"STR_{rand_suffix}"
 ---output---
 xr0 = 0x01, 0x01, adr({lbl_name})
 printline
