@@ -64,9 +64,8 @@ f"<string and %cmd%>"
 Define reusable code blocks:
 ```text
 func function_name(<var>, <var2>):
-  {var2}
-  {var1}
-  xr0 = 0x30303030
+  {<var2>}
+  {<var>}
 ```
 
 Call the function:
@@ -87,7 +86,7 @@ Define variables or registers:
 ```text
 var <var_name> = <value>
 reg <reg> = <value>
-<reg/var name> = <value>
+<reg/var_name> = <value>
 ```
 reg is Rn, ERn, XRn, QRn, where n is any number.
 
