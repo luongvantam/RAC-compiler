@@ -1,0 +1,128 @@
+---syntax---
+line_print({x},{y},{addr})
+---logic---
+---output---
+xr0 = {x}, {y}, {addr}
+line_print
+---
+
+---syntax---
+cls()
+---logic---
+---output---
+buffer_clear
+render.ddd4
+---
+
+---syntax---
+clear()
+---logic---
+---output---
+buffer_clear
+---
+
+---syntax---
+render()
+---logic---
+---output---
+render.ddd4
+---
+
+---syntax---
+str "{string}"
+---logic---
+---output---
+"{string}"
+---
+
+---syntax---
+smallprint({font},{y},{addr})
+---logic---
+---output---
+xr0 = {font}, {y}, {addr}
+smallprint
+---
+
+---syntax---
+render_bitmap({x},{y},{w},{h},{addr_bitmap})
+---logic---
+---output---
+xr0 = {x}, {y}, {w}, {h}
+render_bitmap
+er0 = {addr_bitmap}
+---
+
+---syntax---
+line_draw({x1},{y1},{x2},{y2})
+---logic---
+---output---
+xr0 = {x1}, {y1}, {x2}, {y2}
+line_draw
+---
+
+---syntax---
+setup_loop({src},{backup},{label})
+---logic---
+import random
+import string
+def gen_label(prefix):
+    suffix = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(4))
+    return f"{prefix}_{suffix}"
+lbl_restore = gen_label("RESTORE")
+lbl_length = gen_label("LENGTH")
+lbl_setsp = gen_label("SETSP")
+def to_hex_val(val):
+    v = str(val).strip()
+    try:
+        val_int = int(v, 16) if v.lower().startswith("0x") else int(v, 10)
+        return f"0x{val_int:04x}"
+    except:
+        return v
+src = to_hex_val(src)
+backup = to_hex_val(backup)
+---output---
+lbl {lbl_restore}
+    setlr
+    DI,RT
+    xr0 = adr({lbl_length}), 0x01, 0x00
+    [er0] = er2,rt
+    qr0 = pr_length, {backup}, {src}, 0x0000
+    0x8932
+lbl {lbl_length}
+    0x0800
+    0x0000
+lbl {lbl_setsp}
+    er6 = eval(adr({label}) - 0x2)
+    sp = er6,pop er8
+---
+
+---syntax---
+delay({value})
+---logic---
+val_str = value.strip()
+try:
+    if val_str.lower().startswith("0x"):
+        val_int = int(val_str, 16)
+    else:
+        val_int = int(val_str, 10)
+    value = f"0x{val_int:04x}"
+except:
+    pass
+---output---
+er0 = {value}
+delay
+---
+
+---syntax---
+reset_sfr
+---logic---
+---output---
+setsfr
+---
+
+---syntax---
+{label}:
+---logic---
+---output---
+lbl {label}
+---
