@@ -1,6 +1,6 @@
 # RAC Compiler — Usage Guide
 
-🇻🇳 If you're Vietnamese, please switch to [Guide.vi.md](Guide.vi.md) for Vietnamese.
+🇻🇳 If you're Vietnamese, please switch to [Guide.vi.md](Guide.vi.md) for Vietnamese. 🇻🇳
 
 ---
 
