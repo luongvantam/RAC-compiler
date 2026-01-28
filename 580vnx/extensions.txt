@@ -119,10 +119,3 @@ reset_sfr
 ---output---
 setsfr
 ---
-
----syntax---
-{label}:
----logic---
----output---
-lbl {label}
----

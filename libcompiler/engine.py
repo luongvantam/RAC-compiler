@@ -1,9 +1,20 @@
+
 # -*- coding: utf-8 -*-
-import sys, os, re
+import sys, os, re, textwrap
 from . import context, consts
 from .utils import canonicalize, del_inline_comment, to_lowercase, note
 from .hardware import optimize_adr_for_npress, get_npress, get_npress_adr, byte_to_key
 from .loader import sizeof_register
+
+# Global registry for Python logic functions
+PYTHON_FUNCTIONS = {}
+
+class PyNamespace:
+    def __init__(self, functions):
+        for name, func in functions.items():
+            setattr(self, name, func)
+    def __getattr__(self, name):
+        raise AttributeError(f"Python function '{name}' not found")
 
 in_comment = False
 
@@ -20,10 +31,84 @@ def handle_function_definition(line, program_iter, defined_functions):
     
     body = []
     for _, raw_line in program_iter:
-        stripped = raw_line.strip()
+        stripped = raw_line.split('---')[0].strip()
         if stripped == '}': break
         if stripped: body.append(stripped)
     defined_functions[func_name] = {"args": func_args, "body": body}
+
+def handle_python_def(line, program_iter, python_functions):
+    # Parse header để lấy tên hàm và đối số
+    m = re.match(r'def\s+(\w+)\s*\((.*?)\)\s*\{', line.strip())
+    if not m:
+        raise ValueError(f"Invalid def syntax: {line}")
+    func_name, args_str = m.group(1), m.group(2).strip()
+    func_args = [arg.strip() for arg in args_str.split(',')] if args_str else []
+    
+    body_lines = []
+    # Thu thập các dòng cho đến khi gặp dấu '}' đóng khối
+    for _, raw_line in program_iter:
+        content = raw_line.split('---')[0]
+        if content.strip() == '}':
+            break
+        body_lines.append(content)
+    
+    # Auto-indentation logic
+    indent_level = 0
+    processed_body = []
+    
+    for l in body_lines:
+        stripped = l.strip()
+        if not stripped:
+            continue
+            
+        # Tự động lùi đầu dòng cho các từ khóa đặc biệt
+        if stripped.startswith(('else:', 'elif ', 'except ', 'finally:')):
+            indent_level = max(0, indent_level - 1)
+        
+        # Thêm khoảng trắng dựa trên indent_level hiện tại
+        # (Sử dụng 4 spaces cho mỗi level)
+        processed_body.append("    " * indent_level + stripped)
+        
+        # Nếu dòng kết thúc bằng ':', tăng indent cho dòng tiếp theo
+        if stripped.endswith(':'):
+            indent_level += 1
+
+    # Tạo source code Python hoàn chỉnh với thụt đầu dòng 4 spaces chuẩn cho def
+    func_src = f"def {func_name}({', '.join(func_args)}):\n"
+    if not processed_body:
+        func_src += '    pass\n'
+    else:
+        for l in processed_body:
+            func_src += '    ' + l + '\n'
+            
+    try:
+        local_ns = {}
+        # Thực thi nạp hàm vào registry
+        exec(func_src, {"re": re, "os": os, "sys": sys}, local_ns)
+        python_functions[func_name] = local_ns[func_name]
+    except Exception as e:
+        raise ValueError(f"Error compiling Python function {func_name}:\n{e}\nSource:\n{func_src}")
+
+def handle_python_call(line):
+    """
+    Execute a Python call from assembly.
+    If the function returns a string or list of strings, they are processed as assembly lines.
+    """
+    local_vars = context.vars_dict.copy()
+    local_vars['py'] = PyNamespace(PYTHON_FUNCTIONS)
+    try:
+        res = eval(line, {"py": local_vars['py']}, local_vars)
+        if isinstance(res, str):
+            process_line(res)
+        elif isinstance(res, int):
+            # For integers, convert to hex and process (usually adds bytes)
+            process_line(hex(res))
+        elif isinstance(res, list):
+            for item in res:
+                if isinstance(item, str): process_line(item)
+                elif isinstance(item, int): process_line(hex(item))
+    except Exception as e:
+        raise ValueError(f"Error in Python call {line!r}: {e}")
 
 def handle_hex_data(line):
     hex_str = line[2:]
@@ -41,8 +126,9 @@ def handle_eval_expression(line):
         context.result.extend((0, 0))
     else:
         local_vars = context.vars_dict.copy()
+        local_vars['py'] = PyNamespace(PYTHON_FUNCTIONS)
         try:
-            val = eval(expr, {}, local_vars)
+            val = eval(expr, {"py": local_vars['py']}, local_vars)
         except Exception as e:
             raise ValueError(f"Eval error in line {line!r}: {e}")
         
@@ -111,41 +197,42 @@ def handle_assignment_command(line):
     i = line.index('=')
     left, right = line[:i].strip(), line[i+1:].strip()
 
+    def try_eval(expr):
+        try:
+            local_vars = context.vars_dict.copy()
+            local_vars['py'] = PyNamespace(PYTHON_FUNCTIONS)
+            res = eval(expr, {"py": local_vars['py']}, local_vars)
+            return res
+        except:
+            return expr
+
     if left.startswith("var "):
         var_name = left[4:].strip()
-        val = right.strip()
-        # Try int (dec/hex), else string
-        try:
-            if val.startswith('0x') or val.startswith('0X'):
-                context.vars_dict[var_name] = int(val, 16)
-            else:
-                context.vars_dict[var_name] = int(val)
-        except ValueError:
-            # Remove quotes if present
-            if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
-                val = val[1:-1]
-            context.vars_dict[var_name] = val
-    elif left.startswith("reg "):
-        register = left[4:].strip()
-        value = right.replace(',', ';')
+        val = try_eval(right)
+        if isinstance(val, str) and ((val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'"))):
+            val = val[1:-1]
+        context.vars_dict[var_name] = val
+    elif left.startswith("reg ") or (left[0] in 'rexq' and any(left.startswith(prefix) for prefix in ['r', 'er', 'xr', 'qr'])):
+        register = left[4:].strip() if left.startswith("reg ") else left
+        val = try_eval(right)
+        if isinstance(val, int):
+            value = hex(val)
+        elif isinstance(val, list):
+            # If it's a list, we might need a way to process it. 
+            # For now, let's assume it's converted to a hex string or handled by process_line if supported.
+            value = str(val) 
+        else:
+            value = str(val)
+        
+        value = value.replace(',', ';')
         process_line(f'call pop {register}')
         l1 = len(context.result)
         process_line(value)
         assert len(context.result) - l1 == sizeof_register(register), f'Line {line!r} source/destination target mismatches'
     else:
-        register, value = left, right
-        if register[0] in 'rexq' and any(register.startswith(prefix) for prefix in ['r', 'er', 'xr', 'qr']):
-            value = value.replace(',', ';')
-            process_line(f'call pop {register}')
-            l1 = len(context.result)
-            process_line(value)
-            assert len(context.result) - l1 == sizeof_register(register), f'Line {line!r} source/destination target mismatches'
-        else:
-            try:
-                import ast
-                context.vars_dict[left] = ast.literal_eval(right)
-            except:
-                context.vars_dict[left] = right
+        # Non-prefixed variable assignment
+        val = try_eval(right)
+        context.vars_dict[left] = val
 
 def handle_variable_expansion(line):
     def expand_vars_in_line(s):
@@ -237,10 +324,15 @@ def dispatch_command_handler(line, program_iter=None, defined_functions=None):
     line_strip = line.strip()
     if line.strip().lower().startswith('lbl '):
         handle_label_definition(line)
+    elif line_strip.startswith("def ") and line_strip.endswith('{'):
+        if program_iter is None:
+            raise ValueError("Python def handling requires program_iter")
+        handle_python_def(line_strip, program_iter, PYTHON_FUNCTIONS)
     elif line_strip.startswith("func "):
         if program_iter is None or defined_functions is None:
             raise ValueError("Function handling requires program_iter and defined_functions")
         handle_function_definition(line, program_iter, defined_functions)
+    elif line_strip.startswith('py.'): handle_python_call(line_strip)
     elif line.startswith('0x'): handle_hex_data(line)
     elif line.startswith('eval(') and line.endswith(')'): handle_eval_expression(line)
     elif line.startswith('hex') and 'hex_' not in line: handle_long_hex_data(line)
@@ -278,7 +370,12 @@ def process_line(line):
                 cmd = to_lowercase(cmd)
             process_line(cmd)
     else:
-        dispatch_command_handler(line)
+        # Try to get program_iter and defined_functions from caller's frame if available
+        import inspect
+        frame = inspect.currentframe().f_back
+        program_iter = frame.f_locals.get('program_iter', None)
+        defined_functions = frame.f_locals.get('defined_functions', None)
+        dispatch_command_handler(line, program_iter, defined_functions)
 
 def finalize_processing():
     for pos, left_offset, left_label, right_offset, right_label, op in context.relocation_expressions:
@@ -328,8 +425,13 @@ def process_program(args, program_lines, overflow_initial_sp):
     for line_index, raw_line in program_iter:
         line = canonicalize(del_inline_comment(raw_line))
 
-        if line.strip().startswith("func "):
+        line_strip = line.strip()
+        if line_strip.startswith("func "):
             handle_function_definition(line, program_iter, defined_functions)
+            continue
+
+        if line_strip.startswith("def ") and line_strip.endswith('{'):
+            handle_python_def(line_strip, program_iter, PYTHON_FUNCTIONS)
             continue
 
         m = re.match(r'(\w+)\s*\((.*?)\)', line.strip())

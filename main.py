@@ -11,6 +11,7 @@ parser.add_argument('-g', '--gadget-adr', type=lambda x: int(x, 0), help='Find e
 parser.add_argument('-gb', '--gadget-bin', help='Find equivalent addresses for a hex string')
 parser.add_argument('-gn', '--gadget-nword', type=lambda x: int(x, 0), default=0, help='Number of words for gadget search')
 parser.add_argument('-t', '--target', default='none', help='Target platform')
+parser.add_argument('-i', '--input', help='Input RSC file')
 parser.add_argument('folder', nargs='?', default='.', help='Folder containing config.py and data files')
 
 args, unknown = parser.parse_known_args()
@@ -91,8 +92,18 @@ if __name__ == "__main__":
         analysis.print_addresses(analysis.find_equivalent_addresses(context.rom, {args.gadget_adr}), args.preview_count)
     else:
         try:
-            raw_content = sys.stdin.read().splitlines()
-            if not raw_content:
+            if args.input:
+                if not os.path.exists(args.input):
+                    print(f"Error: Input file not found: {args.input}")
+                    sys.exit(1)
+                with open(args.input, "r", encoding="utf-8") as f:
+                    raw_content = f.read().splitlines()
+                args.source_file = os.path.abspath(args.input)
+            else:
+                raw_content = sys.stdin.read().splitlines()
+                args.source_file = None
+            
+            if not raw_content and not args.input:
                 pass 
             
             program = extensions.expand_extensions_in_program(raw_content, ext_list)
