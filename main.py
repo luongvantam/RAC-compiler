@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
-# Created by luongvantam last created: 02:45 PM 11-01-2025(GMT+7)
 import sys, os, importlib.util, argparse
-from libcompiler import context, loader, hardware, extensions, analysis, engine
+import lib.rop_compiler as rop_compiler
 
 # Setup Parser
 parser = argparse.ArgumentParser(description="RAC Compiler")
@@ -32,12 +31,12 @@ def get_path(filename):
     return os.path.join(folder_path, filename)
 
 # Initialize Compiler Components
-analysis.get_rom(get_path(config.rom_file))
-loader.get_disassembly(get_path(config.disassembly_file))
-loader.get_commands(get_path(config.gadgets_file))
-loader.read_rename_list(get_path(config.labels_file))
-loader.get_key_map(get_path(config.key_map_file))
-ext_list = extensions.load_extensions(get_path(config.extensions_file))
+rop_compiler.get_rom(get_path(config.rom_file))
+rop_compiler.get_disassembly(get_path(config.disassembly_file))
+rop_compiler.get_commands(get_path(config.gadgets_file))
+rop_compiler.read_rename_list(get_path(config.labels_file))
+rop_compiler.get_key_map(get_path(config.key_map_file))
+ext_list = rop_compiler.load_extensions(get_path(config.extensions_file))
 
 # Setup Font and Display
 FINAL_FONT = []
@@ -46,11 +45,11 @@ for row in config.FONT:
 while len(FINAL_FONT) < 256:
     FINAL_FONT.append(' ')
 
-hardware.set_font(FINAL_FONT)
-hardware.set_npress_array(config.NPRESS)
+rop_compiler.set_font(FINAL_FONT)
+rop_compiler.set_npress_array(config.NPRESS)
 
 ROMWINDOW = 0xd000
-ROM_DATA = context.rom
+ROM_DATA = rop_compiler.rom
 
 def fetch(addr):
     return ROM_DATA[addr] | (ROM_DATA[addr+1] << 8)
@@ -78,18 +77,18 @@ def get_symbol(x):
     return r0, bytes(result)
 
 symbols = [''.join(FINAL_FONT[b] for b in get_symbol(x)[1]) for x in range(0xf0)] + ['@']*0x10
-hardware.set_symbolrepr(symbols)
+rop_compiler.set_symbolrepr(symbols)
 
 # Main Execution
 if __name__ == "__main__":
     if args.gadget_bin:
-        analysis.print_addresses(analysis.optimize_gadget(bytes.fromhex(args.gadget_bin)), args.preview_count)
+        rop_compiler.print_addresses(rop_compiler.optimize_gadget(bytes.fromhex(args.gadget_bin)), args.preview_count)
     elif args.gadget_nword > 0 and args.gadget_adr is not None:
         start_adr = args.gadget_adr
         end_adr = start_adr + args.gadget_nword * 2
-        analysis.print_addresses(analysis.optimize_gadget(context.rom[start_adr:end_adr]), args.preview_count)
+        rop_compiler.print_addresses(rop_compiler.optimize_gadget(rop_compiler.rom[start_adr:end_adr]), args.preview_count)
     elif args.gadget_adr is not None:
-        analysis.print_addresses(analysis.find_equivalent_addresses(context.rom, {args.gadget_adr}), args.preview_count)
+        rop_compiler.print_addresses(rop_compiler.find_equivalent_addresses(rop_compiler.rom, {args.gadget_adr}), args.preview_count)
     else:
         try:
             if args.input:
@@ -106,7 +105,7 @@ if __name__ == "__main__":
             if not raw_content and not args.input:
                 pass 
             
-            program = extensions.expand_extensions_in_program(raw_content, ext_list)
-            engine.process_program(args, program, config.overflow_initial_sp)
+            program = rop_compiler.expand_extensions_in_program(raw_content, ext_list)
+            rop_compiler.process_program(args, program, config.overflow_initial_sp)
         except EOFError:
             print("Error: Standard input closed unexpectedly.")

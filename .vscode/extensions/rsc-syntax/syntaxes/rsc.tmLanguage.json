@@ -39,7 +39,7 @@
         },
         {
             "name": "storage.modifier.rsc",
-            "match": "\\b(lbl|func|def|import)\\b"
+            "match": "\\b(lbl|func|def)\\b"
         },
         {
             "name": "storage.type.rsc",
@@ -47,7 +47,7 @@
         },
         {
             "name": "keyword.control.rsc",
-            "match": "\\b(call|goto|eval|org|pr_length|end|if|then|else|return|elif|except|finally|import)\\b"
+            "match": "\\b(call|goto|eval|org|pr_length)\\b"
         },
         {
             "name": "support.function.rsc",
@@ -94,7 +94,7 @@
         },
         {
             "name": "variable.other.register.rsc",
-            "match": "\\b(r[0-9]|er[0-9]|er1[0-4]|xr[0-9]|xr1[0-4]|qr[0-9]|qr1[0-4]|sp|pc)\\b"
+            "match": "\\b(r[0-9]|er[0-9]|er1[0-4]|xr[0-9]|xr1[0-4]|qr[0-9]|qr1[0-4]|R[0-9]|ER[0-9]|ER1[0-4]|XR[0-9]|XR1[0-4]|QR[0-9]|QR1[0-4]|sp|pc|SP|PC|EA|ea)\\b"
         },
         {
             "name": "constant.other.key.rsc",

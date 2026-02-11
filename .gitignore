@@ -1,4 +1,5 @@
-test/
 __pycache__/
 580vnx/__pycache__/
-libcompiler/__pycache__/
+lib/__pycache__/
+tests/
+rsc_ropchain/neural_network.rsc
