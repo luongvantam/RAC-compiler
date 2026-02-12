@@ -60,8 +60,8 @@ Call an address or built-in function, or jump to a label.
 
 ```rsc
 call 0x5678
-call print
-goto start
+call line_print
+goto label
 ```
 
 ---
@@ -122,6 +122,7 @@ Evaluate math or address expressions at compile time.
 ```rsc
 eval(0x1 + 0x2 * 0x3)
 eval(adr(label1) - adr(label2))
+# We can use calc() instead of eval() because they have the same function.
 ```
 
 ---
@@ -138,7 +139,7 @@ reg r1 = 0x5
 r2 = 0xFF
 ```
 
-The way to call a variable is `{varname}`, and the same applies to strings.
+The way to call a variable is `varname`, and the same applies to strings.
 
 ---
 
@@ -164,7 +165,28 @@ KEY_ADD
 
 ---
 
-## 14. Extension System
+## 14. Functions Python
+
+Define a Python function, then call and use it.
+
+```rsc
+org 0xe9e0
+
+def check_even_odd(n) {
+  if n%2==0{
+    return 0x1      # Even
+  } else {
+    return 0x0      # Odd
+  }
+}
+
+py.check_even_odd(0x2)
+py.check_even_odd(0x3)
+```
+
+---
+
+## 15. Extension System
 
 You can define new syntax and macros via `extensions.txt`.
 
@@ -181,14 +203,13 @@ call print
 
 ---
 
-## 15. Full Example
+## 16. Full Example
 
 ```rsc
 org 0xe9e0
 var name = "Nick"
 lbl main
   "Hello,~{name}!"
-  call print
 ```
 
 ---

@@ -47,7 +47,7 @@
         },
         {
             "name": "keyword.control.rsc",
-            "match": "\\b(call|goto|eval|org|pr_length)\\b"
+            "match": "\\b(call|goto|eval|org|pr_length|calc)\\b"
         },
         {
             "name": "support.function.rsc",

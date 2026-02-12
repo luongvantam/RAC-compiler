@@ -2,10 +2,11 @@ org 0xe9e0
 
 def logic_delay_py(value) {
     val_str = str(value).strip()
-    if val_str.lower().startswith("0x"):
+    if val_str.lower().startswith("0x") {
         val_int = int(val_str, 16)
-    else:
+    } else {
         val_int = int(val_str, 10)
+    }
     return f"0x{val_int:04x}"
 }
 

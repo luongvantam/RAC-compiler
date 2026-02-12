@@ -120,6 +120,7 @@ Tính toán biểu thức số học hoặc địa chỉ tại thời điểm bi
 ```rsc
 eval(0x1 + 0x2 * 0x3)
 eval(adr(label1) - adr(label2))
+# ta có thể dùng calc() thay thế eval() vì chức năng như nhau
 ```
 
 ---
@@ -136,7 +137,7 @@ reg r1 = 0x5
 r2 = 0xFF
 ```
 
-Cách gọi biến sẽ là `{varname}` và áp dụng tương tự cho string.
+Cách gọi biến sẽ là `varname` và áp dụng tương tự cho string.
 
 ---
 
@@ -162,7 +163,28 @@ KEY_ADD
 
 ---
 
-## 14. Hệ thống mở rộng (Extension)
+## 14. Functions Python
+
+Định nghĩa một hàm Python, sau đó gọi và sử dụng hàm đó.
+
+```rsc
+org 0xe9e0
+
+def check_even_odd(n) {
+  if n%2==0{
+    return 0x1      # Even
+  } else {
+    return 0x0      # Odd
+  }
+}
+
+py.check_even_odd(0x2)
+py.check_even_odd(0x3)
+```
+
+---
+
+## 15. Hệ thống mở rộng (Extension)
 
 Bạn có thể định nghĩa cú pháp mới, macro qua `extensions.txt`.
 
@@ -179,7 +201,7 @@ call print
 
 ---
 
-## 15. Ví dụ hoàn chỉnh
+## 16. Ví dụ hoàn chỉnh
 
 ```rsc
 org 0xe9e0

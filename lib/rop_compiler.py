@@ -337,82 +337,82 @@ def expand_extensions_in_program(program_lines, extensions):
     return expanded
 
 def read_rename_list(filename):
-	'''Try to parse a rename list.
+    '''Try to parse a rename list.
 
-	If the rename list is ambiguous without disassembly, it raises an error.
-	'''
-	global commands, datalabels
-	with open(filename, 'r', encoding='u8') as f:
-		data = f.read().splitlines()
+    If the rename list is ambiguous without disassembly, it raises an error.
+    '''
+    global commands, datalabels
+    with open(filename, 'r', encoding='u8') as f:
+        data = f.read().splitlines()
 
-	line_regex   = re.compile(r'^\s*([\w_.]+)\s+([\w_.]+)')
-	global_regex = re.compile(r'f_([0-9a-fA-F]+)')
-	local_regex  = re.compile(r'.l_([0-9a-fA-F]+)')
-	data_regex   = re.compile(r'd_([0-9a-fA-F]+)')
-	hexadecimal  = re.compile(r'[0-9a-fA-F]+')
+    line_regex   = re.compile(r'^\s*([\w_.]+)\s+([\w_.]+)')
+    global_regex = re.compile(r'f_([0-9a-fA-F]+)')
+    local_regex  = re.compile(r'.l_([0-9a-fA-F]+)')
+    data_regex   = re.compile(r'd_([0-9a-fA-F]+)')
+    hexadecimal  = re.compile(r'[0-9a-fA-F]+')
 
-	last_global_label = None
-	for line_index0, line in enumerate(data):
-		match = line_regex.match(line)
-		if not match: continue
-		raw, real = match[1], match[2]
-		if real.startswith('.'):
-			# we don't get local labels.
-			continue
+    last_global_label = None
+    for line_index0, line in enumerate(data):
+        match = line_regex.match(line)
+        if not match: continue
+        raw, real = match[1], match[2]
+        if real.startswith('.'):
+            # we don't get local labels.
+            continue
+        
+        match = data_regex.fullmatch(raw)
+        if match:
+            addr = int(match[1], 16)
+            datalabels[real] = addr
+            continue
 
-		match = data_regex.fullmatch(raw)
-		if match:
-			addr = int(match[1], 16)
-			datalabels[real] = addr
-			continue
+        addr = None
+        if hexadecimal.fullmatch(raw):
+            addr = int(raw, 16)
+            last_global_label = None
+            # because we don't know whether this label is global or local
+        else:
+            match = global_regex.match(raw)
+            if match:
+                addr = int(match[1], 16)
+                if len(match[0]) == len(raw):  # global_regex.fullmatch
+                    last_global_label = addr
+                else:
+                    match = local_regex.fullmatch(raw[len(match[0]):])
+                    if match:  # full address f_12345.l_67
+                        addr += int(match[1], 16)
+            else:
+                match = local_regex.fullmatch(raw)
+                if match:
+                    if last_global_label is None:
+                        print('Label cannot be read: ', line)
+                        continue
+                    else:
+                        addr = last_global_label + int(match[1], 16)
 
-		addr = None
-		if hexadecimal.fullmatch(raw):
-			addr = int(raw, 16)
-			last_global_label = None
-			# because we don't know whether this label is global or local
-		else:
-			match = global_regex.match(raw)
-			if match:
-				addr = int(match[1], 16)
-				if len(match[0]) == len(raw):  # global_regex.fullmatch
-					last_global_label = addr
-				else:
-					match = local_regex.fullmatch(raw[len(match[0]):])
-					if match:  # full address f_12345.l_67
-						addr += int(match[1], 16)
-			else:
-				match = local_regex.fullmatch(raw)
-				if match:
-					if last_global_label is None:
-						print('Label cannot be read: ', line)
-						continue
-					else:
-						addr = last_global_label + int(match[1], 16)
+        if addr is not None:
+            assert addr < len(disasm), f'{addr:05X}'
+            if disasm[addr].startswith('push lr'):
+                tags = 'del lr',
+                addr += 2
+            else:
+                tags = 'rt',
+                a1 = addr + 2
+                while not any(disasm[a1].startswith(x) for x in ('push lr', 'pop pc', 'rt')): a1 += 2
+                if not disasm[a1].startswith('rt'):
+                    tags = tags + ('del lr',)
 
-		if addr is not None:
-			assert addr < len(disasm), f'{addr:05X}'
-			if disasm[addr].startswith('push lr'):
-				tags = 'del lr',
-				addr += 2
-			else:
-				tags = 'rt',
-				a1 = addr + 2
-				while not any(disasm[a1].startswith(x) for x in ('push lr', 'pop pc', 'rt')): a1 += 2
-				if not disasm[a1].startswith('rt'):
-					tags = tags + ('del lr',)
+            if real in commands:
+                if 'override rename list' in commands[real][1]:
+                    continue
+                if commands[real] == (addr, tags):
+                    note(f'Warning: Duplicated command {real}\n')
+                    continue
 
-			if real in commands:
-				if 'override rename list' in commands[real][1]:
-					continue
-				if commands[real] == (addr, tags):
-					note(f'Warning: Duplicated command {real}\n')
-					continue
-
-			add_command(commands, addr, real, tags=tags,
-					debug_info=f'at {filename}:{line_index0+1}')
-		else:
-			raise ValueError('Invalid line: ' + repr(line))
+            add_command(commands, addr, real, tags=tags,
+                    debug_info=f'at {filename}:{line_index0+1}')
+        else:
+            raise ValueError('Invalid line: ' + repr(line))
 
 def sizeof_register(reg_name):
     return {'r': 1, 'e': 2, 'x': 4, 'q': 8}[reg_name[0]]
@@ -440,11 +440,6 @@ def handle_label_definition(line):
     assert label not in labels, f'Duplicate label: {label}'
     labels[label] = len(result)
     
-def handle_label_definition(line):
-    label = to_lowercase(line.strip()[4:].strip())
-    assert label not in labels, f'Duplicate label: {label}'
-    labels[label] = len(result)
-    
 def handle_function_definition(line, program_iter, defined_functions):
     m = re.match(r'func\s+(\w+)\s*\((.*?)\)\s*\{', line.strip())
     if not m: raise ValueError(f"Invalid func definition syntax: {line}")
@@ -459,53 +454,106 @@ def handle_function_definition(line, program_iter, defined_functions):
     defined_functions[func_name] = {"args": func_args, "body": body}
 
 def handle_python_def(line, program_iter, python_functions):
-    # Parse header để lấy tên hàm và đối số
+    # Parse header to get function name and arguments
     m = re.match(r'def\s+(\w+)\s*\((.*?)\)\s*\{', line.strip())
     if not m:
         raise ValueError(f"Invalid def syntax: {line}")
     func_name, args_str = m.group(1), m.group(2).strip()
     func_args = [arg.strip() for arg in args_str.split(',')] if args_str else []
     
-    body_lines = []
-    # Thu thập các dòng cho đến khi gặp dấu '}' đóng khối
+    # Collect all body lines, tracking brace depth for nested blocks
+    # depth=1 because we already opened the function's {
+    raw_body = []
+    depth = 1
     for _, raw_line in program_iter:
-        content = raw_line.split('---')[0]
-        if content.strip() == '}':
-            break
-        body_lines.append(content)
+        content = raw_line.split('---')[0].strip()
+        if not content:
+            continue
+        
+        # Count braces in this line
+        open_count = content.count('{')
+        close_count = content.count('}')
+        
+        # If line is just "}", it closes a block
+        if content == '}':
+            depth -= 1
+            if depth <= 0:
+                break
+            raw_body.append(content)
+            continue
+        
+        depth += open_count - close_count
+        raw_body.append(content)
     
-    # Auto-indentation logic
-    indent_level = 0
-    processed_body = []
+    # Now convert the brace-based syntax into valid Python source
+    # Process raw_body into Python lines with proper indentation
+    def convert_block(lines, start_idx):
+        """Convert lines with { } blocks into Python indented code.
+        Returns (python_lines, next_index)"""
+        py_lines = []
+        idx = start_idx
+        while idx < len(lines):
+            line = lines[idx].strip()
+            
+            if line == '}':
+                # End of current block
+                return py_lines, idx + 1
+            
+            if line.endswith('{'):
+                # Start of a sub-block: "if condition {" or "else {"  or "for x in y {"
+                header = line[:-1].strip()  # remove the {
+                
+                # Collect inner block lines until matching }
+                inner_lines, idx = convert_block(lines, idx + 1)
+                
+                if inner_lines:
+                    # Join inner lines with ; for single-line block
+                    inner_joined = '; '.join(inner_lines)
+                    py_lines.append(f"{header}: {inner_joined}")
+                else:
+                    py_lines.append(f"{header}: pass")
+            else:
+                py_lines.append(line)
+                idx += 1
+        
+        return py_lines, idx
     
-    for l in body_lines:
-        stripped = l.strip()
-        if not stripped:
+    # Normalize raw_body to ensure } are on their own lines for correct block parsing
+    normalized_body = []
+    for line in raw_body:
+        s = line.strip()
+        # Handle } at the start (e.g. "} elif ... {" -> "}", "elif ... {")
+        while s.startswith('}'):
+            normalized_body.append('}')
+            s = s[1:].strip()
+        
+        if not s:
             continue
             
-        # Tự động lùi đầu dòng cho các từ khóa đặc biệt
-        if stripped.startswith(('else:', 'elif ', 'except ', 'finally:')):
-            indent_level = max(0, indent_level - 1)
+        # Handle } at the end (e.g. "stmt; }" -> "stmt;", "}")
+        # Only if it's not a one-liner block start like "if { }" which we don't fully support yet,
+        # but safely splitting "abc }" into "abc", "}" works for standard block ends.
+        if s.endswith('}') and not s.startswith('{'):
+            # Avoid splitting "}" if it is just "}" (already handled by startswith but good for safety)
+            if len(s) > 1:
+                normalized_body.append(s[:-1].strip())
+                normalized_body.append('}')
+                continue
         
-        # Thêm khoảng trắng dựa trên indent_level hiện tại
-        # (Sử dụng 4 spaces cho mỗi level)
-        processed_body.append("    " * indent_level + stripped)
-        
-        # Nếu dòng kết thúc bằng ':', tăng indent cho dòng tiếp theo
-        if stripped.endswith(':'):
-            indent_level += 1
+        normalized_body.append(s)
 
-    # Tạo source code Python hoàn chỉnh với thụt đầu dòng 4 spaces chuẩn cho def
+    converted_lines, _ = convert_block(normalized_body, 0)
+    
+    # Build final Python source with proper indentation
     func_src = f"def {func_name}({', '.join(func_args)}):\n"
-    if not processed_body:
+    if not converted_lines:
         func_src += '    pass\n'
     else:
-        for l in processed_body:
+        for l in converted_lines:
             func_src += '    ' + l + '\n'
-            
+    
     try:
         local_ns = {}
-        # Thực thi nạp hàm vào registry
         exec(func_src, {"re": re, "os": os, "sys": sys}, local_ns)
         python_functions[func_name] = local_ns[func_name]
     except Exception as e:
@@ -546,37 +594,44 @@ def handle_hex_data(line):
 
 def handle_eval_expression(line):
     expr = line[5:-1].strip()
-    if 'adr(' in expr:
-        deferred_evals.append((len(result), expr))
+
+    # Step 1: Expand variables from vars_dict into the expression
+    expanded_expr = expr
+    for var_name, var_value in vars_dict.items():
+        pattern = r'\b' + re.escape(var_name) + r'\b'
+        expanded_expr = re.sub(pattern, str(var_value), expanded_expr)
+
+    # Step 2: If expression contains adr(), defer evaluation to later
+    if 'adr(' in expanded_expr:
+        deferred_evals.append((len(result), expanded_expr))
         result.extend((0, 0))
+        return
+
+    # Step 3: Build eval scope with special values
+    eval_scope = {}
+    eval_scope['pr_length'] = len(result)
+    eval_scope['py'] = PyNamespace(PYTHON_FUNCTIONS)
+
+    # Step 4: Evaluate the expanded expression
+    try:
+        val = eval(expanded_expr, {"py": eval_scope.get('py')}, eval_scope)
+    except Exception as e:
+        raise ValueError(f"Eval error in '{expr}' (expanded: '{expanded_expr}'): {e}")
+
+    # Step 5: Process the result back through process_line
+    if isinstance(val, int):
+        process_line(f'0x{val:x}')
+    elif isinstance(val, str):
+        process_line(f'"{val}"')
+    elif isinstance(val, list):
+        for item in val:
+            if isinstance(item, int):
+                process_line(f'0x{item:x}')
+            elif isinstance(item, str):
+                process_line(f'"{item}"')
     else:
-        local_vars = vars_dict.copy()
-        local_vars['py'] = PyNamespace(PYTHON_FUNCTIONS)
-        try:
-            val = eval(expr, {"py": local_vars['py']}, local_vars)
-        except Exception as e:
-            raise ValueError(f"Eval error in line {line!r}: {e}")
-        
-        new_bytes_list = []
-        if isinstance(val, int):
-            hex_str = f"{val:x}"
-            if len(hex_str) % 2 != 0: hex_str = '0' + hex_str
-            val_bytes = val.to_bytes((val.bit_length() + 7) // 8, 'little', signed=val<0)
-            if not val_bytes: val_bytes = b'\x00'
-            new_bytes_list.extend(list(val_bytes))
-        elif isinstance(val, str):
-            for c in val:
-                hx = char_to_hex.get(c)
-                if not hx: raise ValueError(f"Character '{c}' not found in char_to_hex")
-                if len(hx) == 2:
-                    new_bytes_list.append(int(hx, 16))
-                elif len(hx) == 4:
-                    new_bytes_list.extend([int(hx[:2],16), int(hx[2:],16)])
-        elif isinstance(val, list):
-            new_bytes_list.extend(val)
-        else:
-            raise ValueError(f"Unsupported eval result type: {type(val)}")
-        result.extend(new_bytes_list)
+        raise ValueError(f"Unsupported eval result type: {type(val)}")
+
 
 def handle_long_hex_data(line):
     """Syntax: hex <hexadecimal digits>"""
@@ -600,13 +655,13 @@ def handle_call_command(line):
 
     assert 0 <= adr <= max_call_adr, f'Invalid address: {adr}'
     adr = optimize_adr_for_npress(adr)
-    process_line(f'0x{adr + 0x30300000:0{8}x}')
+    # process_line(f'0x{adr + 0x30300000:0{8}x}')
+    process_line(f'0x{adr + 0x00000000:0{8}x}')
 
 def handle_goto_command(line):
     """Syntax: `goto <label>`"""
     label = to_lowercase(line[4:])
-    process_line(f'er14 = eval(adr({label}) - 0x02)')
-    process_line('call sp=er14,pop er14')
+    process_line(f'er14 = eval(adr({label}) - 0x02);call sp=er14,pop er14')
 
 def handle_address_command(line):
     """
@@ -632,7 +687,9 @@ def handle_address_command(line):
 
 def handle_data_label(line):
     """`<label>`."""
-    process_line(f'adr({line}, 0)')
+    global datalabels
+    line=datalabels[line.strip()]
+    process_line(f'0x{line:x}')
 
 def handle_builtin_command(line):
     """`<built-in>`. Equivalent to `call <built-in>`."""
@@ -654,20 +711,7 @@ def handle_assignment_command(line):
 
     if left.startswith("var "):
         var_name = left[4:].strip()
-        val = try_eval(right)
-        if isinstance(val, str) and ((val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'"))):
-            val = val[1:-1]
-        elif isinstance(val, str) and(val.startswith('eval(') and val.endswith(')')):
-            val = try_eval(val[5:-1].strip())
-        elif isinstance(val, str) and(val.startswith('adr(') and val.endswith(')')):
-            inner_content = val[4:-1].strip()
-            label_name = inner_content
-            expr = f'adr("{label_name}")'
-            deferred_evals.append((len(result), expr))
-            result.extend((0, 0))
-        elif isinstance(val, str) and val.startswith('pr_length'):
-            pr_length_cmds.append(len(result))
-            result.extend((0, 0))
+        val = right
         vars_dict[var_name] = val
     elif left.startswith("reg ") or (left[0] in 'rexq' and any(left.startswith(prefix) for prefix in ['r', 'er', 'xr', 'qr'])):
         register = left[4:].strip() if left.startswith("reg ") else left
@@ -694,25 +738,11 @@ def handle_assignment_command(line):
 def handle_variable_expansion(line):
     expanded = line
 
-    # Tìm tất cả biến hợp lệ trong vars_dict
     for var_name, var_value in vars_dict.items():
         pattern = r'\b' + re.escape(var_name) + r'\b'
+        expanded = re.sub(pattern, str(var_value), expanded)
 
-        if isinstance(var_value, str):
-            replacement = var_value
-        else:
-            replacement = str(var_value)
-
-        expanded = re.sub(pattern, replacement, expanded)
-
-    # Xử lý sau khi expand
-    if expanded == line:
-        process_line(line)
-    elif re.fullmatch(r'[\w~ ]+', expanded):
-        process_string_to_hex(expanded)
-    else:
-        process_line(expanded)
-
+    process_line(expanded)
 
 def handle_org_command(line):
     ''' Syntax: `org <expr>`
@@ -791,7 +821,7 @@ def dispatch_command_handler(line, program_iter=None, defined_functions=None):
         handle_function_definition(line, program_iter, defined_functions)
     elif line_strip.startswith('py.'): handle_python_call(line_strip)
     elif line.startswith('0x'): handle_hex_data(line)
-    elif line.startswith('eval(') and line.endswith(')'): handle_eval_expression(line)
+    elif (line.startswith('eval(') or line.startswith('calc(')) and line.endswith(')'): handle_eval_expression(line)
     elif line.startswith('hex') and 'hex_' not in line: handle_long_hex_data(line)
     elif line.startswith('call'): handle_call_command(line)
     elif line.startswith('goto'): handle_goto_command(line)
@@ -803,7 +833,7 @@ def dispatch_command_handler(line, program_iter=None, defined_functions=None):
     elif line.startswith('org'): handle_org_command(line)
     elif line.startswith('pr_length'): handle_pr_length_command(line)
     elif line.strip().upper().startswith('KEY_'): handle_key_constant(line)
-    elif line_strip.startswith('f"') or line_strip.startswith('"'): handle_any_string_command(line_strip)
+    elif line_strip.startswith('"'): handle_any_string_command(line_strip)
     else:
         assert False, f'Unrecognized command: {line!r}'
 
@@ -974,7 +1004,7 @@ def process_program(args, program_lines, overflow_initial_sp):
                 else:
                     print(f"  In line {line_num}{ctx_info}")
                 print(f"    {raw_origin.strip()}")
-                print(f"    ^")
+                print(f"    {"^" * len(raw_origin.strip())}")
                 print(f"CompilerError: {str(e)}")
                 sys.exit()
 
