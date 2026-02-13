@@ -39,7 +39,7 @@
         },
         {
             "name": "storage.modifier.rsc",
-            "match": "\\b(lbl|func|def)\\b"
+            "match": "\\b(lbl|func|def|loop|repeat)\\b"
         },
         {
             "name": "storage.type.rsc",

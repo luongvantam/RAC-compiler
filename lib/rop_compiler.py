@@ -125,13 +125,15 @@ def note(st):
 def to_lowercase(s):
     return s.lower()
 
+import re
+
 def canonicalize(st):
-    ''' Make (st) canonical. '''
-    #st = st.lower()
     st = st.strip()
-    # remove spaces around non alphanumeric
-    st = re.sub(r' *([^a-z0-9]) *', r'\1', st)
-    return st
+    parts = re.split(r'(".*?")', st)  
+    for i in range(len(parts)):
+        if i % 2 == 0:
+            parts[i] = re.sub(r' *([^a-z0-9]) *', r'\1', parts[i])
+    return ''.join(parts)
 
 def del_inline_comment(line):
     return (line + '#')[:line.find('#')].rstrip()
@@ -313,9 +315,12 @@ def expand_extensions_in_program(program_lines, extensions):
                 if ext.get("logic"):
                     try:
                         import random, string, re as re_mod
-                        env = {**local_env, "random": random, "string": string, "re": re_mod}
+                        env = vars_dict.copy()
+                        env.update(local_env)
+                        env.update({"random": random, "string": string, "re": re_mod})
                         exec(ext["logic"], {}, env)
                         local_env.update(env)
+                        vars_dict.update(env)
                     except: pass
                 
                 output_lines = []
@@ -425,7 +430,6 @@ pr_length_cmds = []
 deferred_evals = []
 home = None
 in_comment = False
-string_vars = {}
 vars_dict = {}
 KEY_MAP = {}
 
@@ -580,6 +584,79 @@ def handle_python_call(line):
     except Exception as e:
         raise ValueError(f"Error in Python call {line!r}: {e}")
 
+def handle_repeat_command(line, program_iter):
+    """Syntax: repeat <expr> { <lines> }"""
+    if line.startswith('repeat '):
+        m = re.match(r'repeat\s+(.+?)\s*\{', line.strip())
+    elif line.startswith('loop '):
+        m = re.match(r'loop\s+(.+?)\s*\{', line.strip())
+        
+    if not m:
+        raise ValueError(f"Invalid repeat syntax: {line}")
+    count_expr = m.group(1).strip()
+    try:
+        # Evaluate expr using vars_dict
+        eval_scope = vars_dict.copy()
+        eval_scope['py'] = PyNamespace(PYTHON_FUNCTIONS)
+        count = eval(count_expr, {"py": eval_scope.get('py')}, eval_scope)
+        if not isinstance(count, int):
+             raise ValueError(f"Repeat count must evaluate to int, got {type(count)}")
+    except Exception as e:
+        raise ValueError(f"Error evaluating repeat count '{count_expr}': {e}")
+    
+    # Collect lines until matching }
+    body_items = []
+    depth = 1
+    
+    if program_iter is None: 
+         raise ValueError("repeat command requires an iterator")
+
+    for item in program_iter:
+        # Determine content type
+        if isinstance(item, tuple) and len(item) == 2: # enumerate
+             _, raw_line = item
+             content = raw_line
+        elif isinstance(item, dict):
+             content = item["exec"]
+        elif isinstance(item, str):
+             content = item
+        else:
+             content = str(item)
+
+        content_strip = content.split('---')[0].strip()
+        if not content_strip:
+            continue
+        
+        open_count = content_strip.count('{')
+        close_count = content_strip.count('}')
+        
+        if content_strip == '}':
+            depth -= 1
+            if depth <= 0:
+                break
+            body_items.append(item)
+            continue
+        
+        depth += open_count - close_count
+        body_items.append(item)
+    
+    # Process the body lines 'count' times
+    for i in range(count):
+        # Create a fresh iterator for the body for each repetition
+        body_iter = iter(body_items)
+        for item in body_iter:
+            if isinstance(item, tuple) and len(item) == 2:
+                _, raw_line = item
+                line_to_proc = raw_line
+            elif isinstance(item, dict):
+                line_to_proc = item["exec"]
+            elif isinstance(item, str):
+                line_to_proc = item
+            else:
+                line_to_proc = str(item)
+            
+            process_line(line_to_proc, body_iter)
+
 def handle_hex_data(line):
     """Syntax: 0x<hex_digits>"""
     global result
@@ -643,7 +720,7 @@ def handle_long_hex_data(line):
 
 def handle_call_command(line):
     """Syntax: `call <address>` or `call <built-in>`."""
-    global commands
+    global commands, home
     try:
         adr = int(line[4:], 16)
     except ValueError:
@@ -655,8 +732,10 @@ def handle_call_command(line):
 
     assert 0 <= adr <= max_call_adr, f'Invalid address: {adr}'
     adr = optimize_adr_for_npress(adr)
-    # process_line(f'0x{adr + 0x30300000:0{8}x}')
-    process_line(f'0x{adr + 0x00000000:0{8}x}')
+    if home >= 0xd180 and home < 0xd247:
+        process_line(f'0x{adr + 0x30300000:0{8}x}')
+    else:
+        process_line(f'0x{adr + 0x00000000:0{8}x}')
 
 def handle_goto_command(line):
     """Syntax: `goto <label>`"""
@@ -779,37 +858,32 @@ def handle_key_constant(line):
         raise ValueError(f"Invalid KEY_MAP entry for {keyname}: {value!r}")
     result.extend(new_bytes_list)
 
-def process_string_to_hex(text):
-    processed_text = text.replace(" ", "~")
-    for c in processed_text:
-        if c in char_to_hex:
-            hx = char_to_hex[c]
-            if len(hx) == 2:
-                result.append(int(hx, 16))
-            elif len(hx) == 4:
-                result.extend([int(hx[:2], 16), int(hx[2:], 16)])
-        else:
-            result.append(ord(c))
-
 def handle_any_string_command(line):
     line_strip = line.strip()
     match = re.search(r'"(.*)"', line_strip)
     if not match:
         return
     content = match.group(1)
-    # Replace {var} with value from context.vars_dict
-    def replace_var(m):
-        var_name = m.group(1)
-        if var_name in vars_dict:
-            return str(vars_dict[var_name])
-        else:
-            raise ValueError(f"Undefined variable: {var_name}")
-    content = re.sub(r'\{([a-zA-Z_]\w*)\}', replace_var, content)
-    process_string_to_hex(content)
+    def replace_calc(m):
+        return process_line(f"eval({m.group(1)})") or ''
+    content = re.sub(r'\{([a-zA-Z_]\w*)\}', replace_calc, content)
+    content=content.encode("latin1").decode("utf-8")
+    print("Processing string:", content.replace('~', ' '))
+    processed_text = re.sub(r"\s", "~", content)
+    for c in processed_text:
+        try:
+            hex_val = char_to_hex[c]
+            #print(f"Character '{c}' -> hex value: {hex_val}")  # Debug print
+            if len(hex_val) == 2:
+                result.append(int(hex_val, 16))
+            elif len(hex_val) == 4:
+                result.extend([int(hex_val[:2], 16), int(hex_val[2:], 16)])
+        except KeyError:
+            raise ValueError(f"Character '{c}' not found in conversion table")
 
 def dispatch_command_handler(line, program_iter=None, defined_functions=None):
     line_strip = line.strip()
-    if line.strip().lower().startswith('lbl '):
+    if line_strip.lower().startswith('lbl '):
         handle_label_definition(line)
     elif line_strip.startswith("def ") and line_strip.endswith('{'):
         if program_iter is None:
@@ -819,6 +893,10 @@ def dispatch_command_handler(line, program_iter=None, defined_functions=None):
         if program_iter is None or defined_functions is None:
             raise ValueError("Function handling requires program_iter and defined_functions")
         handle_function_definition(line, program_iter, defined_functions)
+    elif line_strip.startswith("repeat ") or line_strip.startswith("loop "):
+        if program_iter is None:
+            raise ValueError("Repeat handling requires program_iter")
+        handle_repeat_command(line, program_iter)
     elif line_strip.startswith('py.'): handle_python_call(line_strip)
     elif line.startswith('0x'): handle_hex_data(line)
     elif (line.startswith('eval(') or line.startswith('calc(')) and line.endswith(')'): handle_eval_expression(line)
@@ -837,9 +915,9 @@ def dispatch_command_handler(line, program_iter=None, defined_functions=None):
     else:
         assert False, f'Unrecognized command: {line!r}'
 
-def process_line(line):
+def process_line(line, program_iter=None):
     global result, labels, address_requests, relocation_expressions, pr_length_cmds
-    global home, string_vars, in_comment, vars_dict, deferred_evals
+    global home, in_comment, vars_dict, deferred_evals
     line = line.split('---')[0].strip()
 
     if not line or line.isspace():
@@ -861,10 +939,10 @@ def process_line(line):
         `<statement1> ; <statement2> ; ...`
         '''
         for command in line.split(';'):
-            process_line(to_lowercase(command))
+            process_line(to_lowercase(command), program_iter)
 
     else:
-        dispatch_command_handler(line)
+        dispatch_command_handler(line, program_iter)
 
 def finalize_processing():
     global result, labels, address_requests
@@ -900,7 +978,7 @@ def finalize_processing():
 def process_program(args, program_lines, overflow_initial_sp):
     global result, labels, address_requests
     global relocation_expressions, pr_length_cmds, home
-    global string_vars, in_comment, note
+    global in_comment, note
     global deferred_evals, vars_dict
 
     result = []
@@ -910,9 +988,8 @@ def process_program(args, program_lines, overflow_initial_sp):
     pr_length_cmds = []
     deferred_evals = []
     home = None
-    string_vars = {}
     in_comment = False
-    vars_dict = {}
+    # vars_dict = {}
     
     final_execution_plan = []
     
@@ -922,7 +999,7 @@ def process_program(args, program_lines, overflow_initial_sp):
     
     orig_line_map = []
     for idx, raw_line in enumerate(program_lines):
-        orig_line_map.append(idx + 1)  # 1-based line number
+        orig_line_map.append(idx + 1)
 
     program_iter = iter(enumerate(program_lines))
     for line_index, raw_line in program_iter:
@@ -961,7 +1038,8 @@ def process_program(args, program_lines, overflow_initial_sp):
 
         final_lines_to_process.append({"exec": line, "raw": raw_line, "num": orig_line_map[line_index], "ctx": ""})
 
-    for item in final_lines_to_process:
+    lines_iter = iter(final_lines_to_process)
+    for item in lines_iter:
             if isinstance(item, dict):
                 line = item["exec"]
                 raw_origin = item["raw"]
@@ -972,7 +1050,7 @@ def process_program(args, program_lines, overflow_initial_sp):
                 raw_origin = item
                 line_num = "?"
                 context = ""
-
+            
             line_strip = canonicalize(del_inline_comment(line))
 
             if not line_strip.startswith('"'):
@@ -994,7 +1072,7 @@ def process_program(args, program_lines, overflow_initial_sp):
             old_len_result = len(result)
             
             try:
-                process_line(line_to_process)
+                process_line(line_to_process, lines_iter)
             except Exception as e:
                 print(f"\nTraceback (most recent call last):")
                 ctx_info = f", {context}" if context else ""

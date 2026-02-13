@@ -184,7 +184,20 @@ py.check_even_odd(0x3)
 
 ---
 
-## 15. Hệ thống mở rộng (Extension)
+## 15. Vòng lặp
+
+Lặp lại một tập hợp nào đó một số lần cố định trong quá trình biên dịch.
+
+```rsc
+loop 4 {
+  0x67
+}
+hex 00 00
+```
+
+---
+
+## 16. Hệ thống mở rộng (Extension)
 
 Bạn có thể định nghĩa cú pháp mới, macro qua `extensions.txt`.
 
@@ -201,7 +214,7 @@ call print
 
 ---
 
-## 16. Ví dụ hoàn chỉnh
+## 17. Ví dụ hoàn chỉnh
 
 ```rsc
 org 0xe9e0

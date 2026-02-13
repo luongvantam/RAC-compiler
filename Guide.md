@@ -186,7 +186,20 @@ py.check_even_odd(0x3)
 
 ---
 
-## 15. Extension System
+## 15. Repeat
+
+Repeat a block of code a fixed number of times at compile time.
+
+```rsc
+loop 4 {
+  0x67
+}
+hex 00 00
+```
+
+---
+
+## 16. Extension System
 
 You can define new syntax and macros via `extensions.txt`.
 
@@ -203,7 +216,7 @@ call print
 
 ---
 
-## 16. Full Example
+## 17. Full Example
 
 ```rsc
 org 0xe9e0

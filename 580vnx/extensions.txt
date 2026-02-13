@@ -29,10 +29,10 @@ render.ddd4
 ---
 
 ---syntax---
-str "{string}"
+str{string}
 ---logic---
 ---output---
-"{string}"
+{string}
 ---
 
 ---syntax---
@@ -63,14 +63,6 @@ line_draw
 ---syntax---
 setup_loop({src},{backup},{label})
 ---logic---
-import random
-import string
-def gen_label(prefix):
-    suffix = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(4))
-    return f"{prefix}_{suffix}"
-lbl_restore = gen_label("RESTORE")
-lbl_length = gen_label("LENGTH")
-lbl_setsp = gen_label("SETSP")
 def to_hex_val(val):
     v = str(val).strip()
     try:
@@ -81,18 +73,18 @@ def to_hex_val(val):
 src = to_hex_val(src)
 backup = to_hex_val(backup)
 ---output---
-lbl {lbl_restore}
+lbl restore
     setlr
     DI,RT
-    xr0 = adr({lbl_length}), 0x01, 0x00
+    xr0 = adr(length), 0x01, 0x00
     [er0] = er2,rt
     qr0 = pr_length, {backup}, {src}, 0x0000
     0x8932
-lbl {lbl_length}
+lbl length
     0x0800
     0x0000
-lbl {lbl_setsp}
-    er6 = eval(adr({label}) - 0x2)
+lbl setsp
+    er6 = eval({label} - 0x2)
     sp = er6,pop er8
 ---
 
@@ -118,4 +110,12 @@ reset_sfr
 ---logic---
 ---output---
 setsfr
+---
+
+---syntax---
+pop{reg}({value})
+---logic---
+---output---
+pop {reg}
+{value}
 ---
