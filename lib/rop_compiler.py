@@ -617,18 +617,6 @@ def handle_repeat_command(line, program_iter):
             
             process_line(line_to_proc, body_iter)
 
-def handle_hex_data(line):
-    """Syntax: 0x<hex_digits>"""
-    global result
-    hex_str = line[2:]
-    if len(hex_str) % 2 != 0:
-        hex_str = '0' + hex_str
-    n_byte = len(hex_str) // 2
-    data = int(hex_str, 16)
-    for _ in range(n_byte):
-        result.append(data & 0xFF)
-        data >>= 8
-
 def handle_eval_expression(line):
     expr = line[5:-1].strip()
 
@@ -639,10 +627,9 @@ def handle_eval_expression(line):
         expanded_expr = re.sub(pattern, str(var_value), expanded_expr)
 
     # Step 2: Xử lý eval lồng nhau (đệ quy)
-
     def eval_nested(s, eval_scope):
         # Tìm tất cả eval(...) lồng nhau và thay thế bằng kết quả tính toán
-        pattern = re.compile(r'eval\(([^()]*(?:\([^()]*\)[^()]*)*)\)')
+        pattern = re.compile(r'\beval\(([^()]*(?:\([^()]*\)[^()]*)*)\)')
         while 'eval(' in s:
             matches = list(pattern.finditer(s))
             if not matches:
@@ -651,6 +638,12 @@ def handle_eval_expression(line):
                 inner = m.group(1)
                 # Đệ quy xử lý tiếp bên trong, truyền eval_scope
                 inner_result = eval_nested(inner.strip(), eval_scope)
+
+                if 'adr(' in inner_result:
+                    replacement = f'({inner_result})'
+                    s = s[:m.start()] + replacement + s[m.end():]
+                    continue
+
                 try:
                     val = eval(inner_result, {"py": eval_scope.get('py')}, eval_scope)
                 except Exception as e:
@@ -707,14 +700,26 @@ def handle_eval_expression(line):
     else:
         raise ValueError(f"Unsupported eval result type: {type(val)}")
 
-
-def handle_long_hex_data(line):
-    """Syntax: hex <hexadecimal digits>"""
+def handle_hex_data(line):
+    """Syntax: 
+        0x<hex_digits>
+        hex <hex_digits_reversed>
+    """
     global result
-    data_str = line[3:].strip()
-    assert len(data_str.replace(" ", "")) % 2 == 0, f'Invalid data length'
-    data_bytes = bytes.fromhex(data_str)
-    result.extend(data_bytes)
+    if line.startswith('0x'):
+        hex_str = line[2:]
+        if len(hex_str) % 2 != 0:
+            hex_str = '0' + hex_str
+        n_byte = len(hex_str) // 2
+        data = int(hex_str, 16)
+        for _ in range(n_byte):
+            result.append(data & 0xFF)
+            data >>= 8
+    elif line.startswith('hex'):
+        data_str = line[3:].strip()
+        assert len(data_str.replace(" ", "")) % 2 == 0, f'Invalid data length'
+        data_bytes = bytes.fromhex(data_str)
+        result.extend(data_bytes)
 
 def handle_call_command(line):
     """Syntax: `call <address>` or `call <built-in>`."""
@@ -795,7 +800,8 @@ def handle_assignment_command(line):
         vars_dict[var_name] = val
     elif left.startswith("reg ") or (left[0] in 'rexq' and any(left.startswith(prefix) for prefix in ['r', 'er', 'xr', 'qr'])):
         register = left[4:].strip() if left.startswith("reg ") else left
-        val = try_eval(right)
+        right = right.lower()
+        print(right)
         value = right.replace(',', ';')
         process_line(f'call pop {register}')
         l1 = len(result)
@@ -890,9 +896,8 @@ def dispatch_command_handler(line, program_iter=None, defined_functions=None):
             raise ValueError("Repeat handling requires program_iter")
         handle_repeat_command(line, program_iter)
     elif line_strip.startswith('py.'): handle_python_call(line_strip)
-    elif line.startswith('0x'): handle_hex_data(line)
+    elif line.startswith('0x') or (line.startswith('hex') and 'hex_' not in line): handle_hex_data(line)
     elif (line.startswith('eval(') or line.startswith('calc(')) and line.endswith(')'): handle_eval_expression(line)
-    elif line.startswith('hex') and 'hex_' not in line: handle_long_hex_data(line)
     elif line.startswith('call'): handle_call_command(line)
     elif line.startswith('goto'): handle_goto_command(line)
     elif line.startswith('adr'): handle_address_command(line)
