@@ -3,43 +3,11 @@
 from ast import expr
 import re, sys, os
 from functools import lru_cache
+from lib.text import char_to_hex
 
 max_call_adr = 0x3ffff
-char_to_hex = dict(zip(
-    '''0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁáÀàẢảÃãẠạĂăẮắẰằẲẳẴẵẶặÂâẤấẦầẨẩẪẫẬậÉéÈèẺẻẼẽẸẹÊêẾếỀềỂểỄễỆệÍíÌìỈỉĨĩỊịÓóÒòỎỏÕõỌọÔôỐốỒồỔổỖỗỘộƠơỚớỜờỞởỠỡỢợÚúÙùỦủŨũỤụƯưỨứỪừỬửỮữỰựÝýỲỳỶỷỸỹỴỵĐđ~@_&-+()/*':!?|√÷×^°{}[]%.,''',
-    [
-        '30', '31', '32', '33', '34', '35', '36', '37', '38', '39',
-        '41', '42', '43', '44', '45', '46', '47', '48', '49', '4A',
-        '4B', '4C', '4D', '4E', '4F', '50', '51', '52', '53', '54',
-        '55', '56', '57', '58', '59', '5A', '61', '62', '63', '64',
-        '65', '66', '67', '68', '69', '6A', '6B', '6C', '6D', '6E',
-        '6F', '70', '71', '72', '73', '74', '75', '76', '77', '78',
-        '79', '7A', 'F451', 'F471', 'F450', 'F470', 'F454', 'F474',
-        'F453', 'F473', 'F410', 'F465', 'F455', 'F475', 'F411', 'F431',
-        'F412', 'F432', 'F490', 'F456', 'F491', 'F457', 'F413', 'F433',
-        'F452', 'F472', 'F414', 'F434', 'F415', 'F435', 'F416', 'F436',
-        'F492', 'F477', 'F417', 'F437', 'F459', 'F479', 'F458', 'F478',
-        'F45B', 'F47B', 'F418', 'F438', 'F419', 'F439', 'F45A', 'F47A',
-        'F41A', 'F43A', 'F41B', 'F43B', 'F41C', 'F43C', 'F41D', 'F43D',
-        'F41E', 'F43E', 'F45D', 'F47D', 'F45C', 'F47C', 'F42B', 'F47F',
-        'F45E', 'F47E', 'F428', 'F448', 'F463', 'F483', 'F462', 'F482',
-        'F429', 'F486', 'F430', 'F485', 'F42A', 'F487', 'F464', 'F484',
-        'F41F', 'F43F', 'F420', 'F440', 'F421', 'F441', 'F422', 'F442',
-        'F423', 'F445', 'F444', 'F44D', 'F425', 'F44E', 'F426', 'F446',
-        'F427', 'F447', 'F443', 'F46E', 'F424', 'F48E', 'F46A', 'F48A',
-        'F469', 'F489', 'F42C', 'F48C', 'F42D', 'F48B', 'F42E', 'F488',
-        'F44F', 'F46F', 'F44A', 'F461', 'F44B', 'F467', 'F44C', 'F468',
-        'F48F', 'F476', 'F449', 'F481', 'F46D', 'F48D', 'F42F', 'F45F',
-        'F493', 'F466', 'F494', 'F46B', 'F495', 'F46C', 'F460', 'F480',
-        '20', '40', '5F', '1A', '2D', '2B', '28', '29', '2F',
-        '2A', '27', '3A', '21', '3F', '7C', '98', '26',
-        '24', '5E', '85', '7B', '7D', '5B', '5D', '25',
-        '2E', '2C'
-    ]
-))
 
 PYTHON_FUNCTIONS = {}
-
 class PyNamespace:
     def __init__(self, functions):
         for name, func in functions.items():
@@ -124,8 +92,6 @@ def note(st):
 
 def to_lowercase(s):
     return s.lower()
-
-import re
 
 def canonicalize(st):
     st = st.strip()
@@ -489,8 +455,6 @@ def handle_python_def(line, program_iter, python_functions):
         depth += open_count - close_count
         raw_body.append(content)
     
-    # Now convert the brace-based syntax into valid Python source
-    # Process raw_body into Python lines with proper indentation
     def convert_block(lines, start_idx):
         """Convert lines with { } blocks into Python indented code.
         Returns (python_lines, next_index)"""
@@ -533,10 +497,7 @@ def handle_python_def(line, program_iter, python_functions):
         
         if not s:
             continue
-            
-        # Handle } at the end (e.g. "stmt; }" -> "stmt;", "}")
-        # Only if it's not a one-liner block start like "if { }" which we don't fully support yet,
-        # but safely splitting "abc }" into "abc", "}" works for standard block ends.
+        
         if s.endswith('}') and not s.startswith('{'):
             # Avoid splitting "}" if it is just "}" (already handled by startswith but good for safety)
             if len(s) > 1:
@@ -573,9 +534,8 @@ def handle_python_call(line):
     try:
         res = eval(line, {"py": local_vars['py']}, local_vars)
         if isinstance(res, str):
-            process_line(res)
+            process_line(f'"{res}"')
         elif isinstance(res, int):
-            # For integers, convert to hex and process (usually adds bytes)
             process_line(hex(res))
         elif isinstance(res, list):
             for item in res:
@@ -678,24 +638,62 @@ def handle_eval_expression(line):
         pattern = r'\b' + re.escape(var_name) + r'\b'
         expanded_expr = re.sub(pattern, str(var_value), expanded_expr)
 
-    # Step 2: If expression contains adr(), defer evaluation to later
-    if 'adr(' in expanded_expr:
-        deferred_evals.append((len(result), expanded_expr))
-        result.extend((0, 0))
-        return
+    # Step 2: Xử lý eval lồng nhau (đệ quy)
+
+    def eval_nested(s, eval_scope):
+        # Tìm tất cả eval(...) lồng nhau và thay thế bằng kết quả tính toán
+        pattern = re.compile(r'eval\(([^()]*(?:\([^()]*\)[^()]*)*)\)')
+        while 'eval(' in s:
+            matches = list(pattern.finditer(s))
+            if not matches:
+                break
+            for m in reversed(matches):
+                inner = m.group(1)
+                # Đệ quy xử lý tiếp bên trong, truyền eval_scope
+                inner_result = eval_nested(inner.strip(), eval_scope)
+                try:
+                    val = eval(inner_result, {"py": eval_scope.get('py')}, eval_scope)
+                except Exception as e:
+                    raise ValueError(f"Eval error in nested eval('{inner}') (expanded: '{inner_result}'): {e}")
+                if isinstance(val, int):
+                    val_str = str(val)
+                elif isinstance(val, str):
+                    val_str = repr(val)
+                elif isinstance(val, list) and val:
+                    val_str = str(val[0])
+                else:
+                    raise ValueError(f"Unsupported nested eval result type: {type(val)}")
+                s = s[:m.start()] + val_str + s[m.end():]
+        return s
 
     # Step 3: Build eval scope with special values
     eval_scope = {}
     eval_scope['pr_length'] = len(result)
     eval_scope['py'] = PyNamespace(PYTHON_FUNCTIONS)
+    # Thêm các biến hiện tại vào scope
+    for k, v in vars_dict.items():
+        eval_scope[k] = v
 
-    # Step 4: Evaluate the expanded expression
+    expanded_expr = eval_nested(expanded_expr, eval_scope)
+
+    # Step 3: If expression contains adr(), defer evaluation to later
+    if 'adr(' in expanded_expr:
+        deferred_evals.append((len(result), expanded_expr))
+        result.extend((0, 0))
+        return
+
+    # Step 4: Build eval scope with special values
+    eval_scope = {}
+    eval_scope['pr_length'] = len(result)
+    eval_scope['py'] = PyNamespace(PYTHON_FUNCTIONS)
+
+    # Step 5: Evaluate the expanded expression
     try:
         val = eval(expanded_expr, {"py": eval_scope.get('py')}, eval_scope)
     except Exception as e:
         raise ValueError(f"Eval error in '{expr}' (expanded: '{expanded_expr}'): {e}")
 
-    # Step 5: Process the result back through process_line
+    # Step 6: Process the result back through process_line
     if isinstance(val, int):
         process_line(f'0x{val:x}')
     elif isinstance(val, str):
@@ -732,9 +730,12 @@ def handle_call_command(line):
 
     assert 0 <= adr <= max_call_adr, f'Invalid address: {adr}'
     adr = optimize_adr_for_npress(adr)
-    if home >= 0xd180 and home < 0xd247:
-        process_line(f'0x{adr + 0x30300000:0{8}x}')
-    else:
+    try:
+        if home >= 0xd180 and home < 0xd247:
+            process_line(f'0x{adr + 0x30300000:0{8}x}')
+        else:
+            process_line(f'0x{adr + 0x00000000:0{8}x}')
+    except TypeError:
         process_line(f'0x{adr + 0x00000000:0{8}x}')
 
 def handle_goto_command(line):
@@ -795,16 +796,7 @@ def handle_assignment_command(line):
     elif left.startswith("reg ") or (left[0] in 'rexq' and any(left.startswith(prefix) for prefix in ['r', 'er', 'xr', 'qr'])):
         register = left[4:].strip() if left.startswith("reg ") else left
         val = try_eval(right)
-        if isinstance(val, int):
-            value = hex(val)
-        elif isinstance(val, list):
-            # If it's a list, we might need a way to process it. 
-            # For now, let's assume it's converted to a hex string or handled by process_line if supported.
-            value = str(val) 
-        else:
-            value = str(val)
-        
-        value = value.replace(',', ';')
+        value = right.replace(',', ';')
         process_line(f'call pop {register}')
         l1 = len(result)
         process_line(value)
@@ -990,11 +982,7 @@ def process_program(args, program_lines, overflow_initial_sp):
     home = None
     in_comment = False
     # vars_dict = {}
-    
-    final_execution_plan = []
-    
     final_lines_to_process = []
-    
     defined_functions = {}
     
     orig_line_map = []

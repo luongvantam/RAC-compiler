@@ -29,10 +29,10 @@ render.ddd4
 ---
 
 ---syntax---
-str{string}
+str "{string}"
 ---logic---
 ---output---
-{string}
+"{string}"
 ---
 
 ---syntax---

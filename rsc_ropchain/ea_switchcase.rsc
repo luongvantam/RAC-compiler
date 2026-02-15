@@ -1,10 +1,9 @@
 # launcher in 0xd180:FD 24 30 30 A8 9F 30 30 E0 A0 30 30 34 7b 31 30 30 d7 e0 e9 51 94 30 30 FE 01 78 5C 31 30 2e D7 60 0D 32 30
 org 0xd730
-
 lbl cursor_no_flash
     xr0 = hex 13 d1 01 00
     [er0]=r2              # store 0x1 to addr 0xd113
-
+    
 lbl setupkey
     er0 = adr(key)
     getscancode
