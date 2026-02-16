@@ -1,0 +1,120 @@
+17B7E	pop qr0
+13956	pop qr8
+16438	pop xr0
+17136	pop xr4
+23B86	pop xr8
+15E92	pop xr12
+18958	pop er0
+20692	pop er2
+19868	pop er4
+164BE	pop er6
+42F30	pop er8
+4525C	pop er10
+2088A	pop er12
+1086C	pop er14
+19C58	pop r0
+208C8	pop r1
+16160	pop r4
+166F0	pop r6,pop er12
+16F9E	pop r8
+201FA	pop r9
+395D8	pop r12
+2A5EE	pop ea
+33920	pop pc
+
+09CCE	setsfr
+06E2E	setlr
+06E82	di,rt
+06E70	NOP,NOP,rt
+83030	brk
+351B0	hex_byte,pop xr8
+
+13452	[er4]+=1
+1345E	[er4]-=1
+090CA	[er10+c] += er0,sp=er14,pop xr4,pop qr8
+43154	[er10]+=er0,r0=0,pop xr8
+
+13454	er0 = [er4],er0+=1,[er4] = er0,pop er0,rt
+
+0C1A2	r1=0,[er8]+=er2,er2+=er0,st er2,[er8],r0=1,pop er4,er8,er12,rt
+
+# L gadgets:
+13D70	er0 = [er2],r2 = 9,rt
+13D3C	er8 = [er0],rt
+17006	er4 = [er8],pop er8,rt
+39B0C	er0 = [er0],pop xr8,rt
+1884C	r0 = [er0]
+
+# ST gadgets:
+1934E	[er0] = r2,r0=0
+1681E	[er2] = r0,r0=0
+0E3C2	[er10] = er0,r0 = 0,pop er10
+13B92	[er0]=er2,rt
+17026	[er2] = er0,r2 = 0,pop er4
+13458	[er4] = er0,pop er0,rt
+
+# MOV gadgets:
+1557A	er0 = er8
+1637A	er8 = er0
+1807E	er14 = er0,pop xr0
+13D62	er2=er0,er0+=er4,rt
+37106	er2=er0,er0=er2
+370FE	er0=er2
+0B052	r0=r1,rt
+151BE	er10=er0,rt
+
+# ADD gadgets:
+49934	er0+=er2,rt
+20F2E	er2+=er8,rt
+20F28	er0+=er8,rt
+13D52	er4+=er0,r8=r8,rt
+0B0B6	er2+=2,er0=er2,rt
+0B0BA	er2+=1,er0=er2,rt
+13D6E	er2+=er0,er0=[er2],r2=9,rt
+13D64	er0+=er4,rt
+
+# SUB gadgets:
+091C2	r0-=r2,rt
+
+# MUL gadgets:
+13D60	er0*=r2,er2 = er0,er0+=er4,rt
+
+# DIV gadgets:
+380FE	er0/=r2,rt
+
+#jumptable:
+13D38	jumptablesub
+
+# CMP gadgets:
+19910	er0 - er2_gt,r0 = 0,pop er4
+41B70	er2 - er4_beq,r0 = 0,pop er12,pop xr4,pop xr8,sp = er14,pop er14
+07D26	er0 = 00,r4 = 1,r0 = r4,pop er4
+2EF96	r3 > bf,r0 = 00,pop er8,rt
+09036	r0 < 3f,r0 = 01,pop er8,rt
+
+# AND gadgets:
+325E6	r0 & 0f,rt
+
+# OR gadgets:
+123DC	r0 | r1
+
+# SLL gadgets:
+1C9E4	r1 << 4
+1C9C8	r0 << 4
+
+#mov sp gadgets:
+21342	sp=[er8],pop er8
+21344	sp=er6,pop er8
+199EC	sp=er4,sp+=46,pop xr4,pop qr8
+29852	sp=er14,pop er14
+4335C	B leave
+
+# some bl:
+14DE8	BL memcpy,pop er4
+0A470	BL render.ca54
+
+# switch:
+4B68C	er2_switch
+
+# idk:
+0B0AE	check_Fxxx

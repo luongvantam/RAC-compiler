@@ -10,8 +10,8 @@ parser.add_argument('-g', '--gadget-adr', type=lambda x: int(x, 0), help='Find e
 parser.add_argument('-gb', '--gadget-bin', help='Find equivalent addresses for a hex string')
 parser.add_argument('-gn', '--gadget-nword', type=lambda x: int(x, 0), default=0, help='Number of words for gadget search')
 parser.add_argument('-t', '--target', default='none', help='Target platform')
-parser.add_argument('-i', '--input', help='Input RSC file')
 parser.add_argument('folder', nargs='?', default='.', help='Folder containing config.py and data files')
+parser.add_argument('input_file', nargs='?', help='Input RSC file')
 
 args, unknown = parser.parse_known_args()
 
@@ -37,6 +37,7 @@ rop_compiler.get_commands(get_path(config.gadgets_file))
 rop_compiler.read_rename_list(get_path(config.labels_file))
 rop_compiler.get_key_map(get_path(config.key_map_file))
 ext_list = rop_compiler.load_extensions(get_path(config.extensions_file))
+rop_compiler.disas_filename = get_path(config.disassembly_file)
 
 # Setup Font and Display
 FINAL_FONT = []
@@ -91,18 +92,18 @@ if __name__ == "__main__":
         rop_compiler.print_addresses(rop_compiler.find_equivalent_addresses(rop_compiler.rom, {args.gadget_adr}), args.preview_count)
     else:
         try:
-            if args.input:
-                if not os.path.exists(args.input):
-                    print(f"Error: Input file not found: {args.input}")
+            if args.input_file:
+                if not os.path.exists(args.input_file):
+                    print(f"Error: Input file not found: {args.input_file}")
                     sys.exit(1)
-                with open(args.input, "r", encoding="utf-8") as f:
+                with open(args.input_file, "r", encoding="utf-8") as f:
                     raw_content = f.read().splitlines()
-                args.source_file = os.path.abspath(args.input)
+                args.source_file = os.path.abspath(args.input_file)
             else:
                 raw_content = sys.stdin.read().splitlines()
                 args.source_file = None
             
-            if not raw_content and not args.input:
+            if not raw_content and not args.input_file:
                 pass 
             
             program = rop_compiler.expand_extensions_in_program(raw_content, ext_list)

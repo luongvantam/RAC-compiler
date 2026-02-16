@@ -15,4 +15,7 @@ func delay_from_rsc(value) {
     delay
 }
 
+func main() {
+    0x00000000
+
 delay_from_rsc(0x111)

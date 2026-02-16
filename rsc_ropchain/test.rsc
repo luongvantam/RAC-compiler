@@ -1,3 +1,6 @@
 org 0xe9e0
 
-eval("g" *3)
+find_gadgets {
+    mov er{a[1]}, er{b[1]}
+    pop pc
+}

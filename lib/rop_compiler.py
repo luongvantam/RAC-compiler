@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
-# Created by luongvantam last created: 02:45 PM 11-01-2025(GMT+7)
+# Created by user202729
+# Modified by hieuxyz(comment,supported by casio2k9) (HD Compiler), luongvantam (RAC Compiler)
 from ast import expr
 import re, sys, os
 from functools import lru_cache
 from lib.text import char_to_hex
+from lib.find_gadgets import find_first_gadget
 
 max_call_adr = 0x3ffff
 
@@ -117,7 +119,6 @@ def add_command(command_dict, address, command, tags, debug_info=''):
     assert ';' not in command, \
         f'Command contains ";" {debug_info}'
 
-    # this is inefficient
     for prev_command, (prev_adr, prev_tags) in command_dict.items():
         if prev_command == command or prev_adr == address:
             assert False, f'Command appears twice - ' \
@@ -127,9 +128,9 @@ def add_command(command_dict, address, command, tags, debug_info=''):
 
     command_dict[command] = (address, tuple(tags))
 
-# A dict of {name: (address, tags)} to append result to.
 commands = {}
 datalabels = {}
+disas_filename = None
 
 def get_commands(filename):
     ''' Read a list of gadget names.
@@ -146,7 +147,6 @@ def get_commands(filename):
     for line_index0, line in enumerate(data):
         line = line.strip()
 
-        # multi-line comments
         if line == '/*':
             in_comment = True
             continue
@@ -220,7 +220,7 @@ def get_disassembly(filename):
 	line_regex = re.compile(r'\t(.*?)\s*; ([0-9a-fA-F]*) \|')
 	disasm = []
 	for line in data:
-		match = line_regex.match(line)  # match prefix
+		match = line_regex.match(line)
 		if match:
 			addr = int(match[2], 16)
 			while addr >= len(disasm): disasm.append('')
@@ -328,7 +328,6 @@ def read_rename_list(filename):
         if not match: continue
         raw, real = match[1], match[2]
         if real.startswith('.'):
-            # we don't get local labels.
             continue
         
         match = data_regex.fullmatch(raw)
@@ -341,16 +340,15 @@ def read_rename_list(filename):
         if hexadecimal.fullmatch(raw):
             addr = int(raw, 16)
             last_global_label = None
-            # because we don't know whether this label is global or local
         else:
             match = global_regex.match(raw)
             if match:
                 addr = int(match[1], 16)
-                if len(match[0]) == len(raw):  # global_regex.fullmatch
+                if len(match[0]) == len(raw):
                     last_global_label = addr
                 else:
                     match = local_regex.fullmatch(raw[len(match[0]):])
-                    if match:  # full address f_12345.l_67
+                    if match:
                         addr += int(match[1], 16)
             else:
                 match = local_regex.fullmatch(raw)
@@ -424,15 +422,12 @@ def handle_function_definition(line, program_iter, defined_functions):
     defined_functions[func_name] = {"args": func_args, "body": body}
 
 def handle_python_def(line, program_iter, python_functions):
-    # Parse header to get function name and arguments
     m = re.match(r'def\s+(\w+)\s*\((.*?)\)\s*\{', line.strip())
     if not m:
         raise ValueError(f"Invalid def syntax: {line}")
     func_name, args_str = m.group(1), m.group(2).strip()
     func_args = [arg.strip() for arg in args_str.split(',')] if args_str else []
     
-    # Collect all body lines, tracking brace depth for nested blocks
-    # depth=1 because we already opened the function's {
     raw_body = []
     depth = 1
     for _, raw_line in program_iter:
@@ -440,11 +435,9 @@ def handle_python_def(line, program_iter, python_functions):
         if not content:
             continue
         
-        # Count braces in this line
         open_count = content.count('{')
         close_count = content.count('}')
         
-        # If line is just "}", it closes a block
         if content == '}':
             depth -= 1
             if depth <= 0:
@@ -464,18 +457,13 @@ def handle_python_def(line, program_iter, python_functions):
             line = lines[idx].strip()
             
             if line == '}':
-                # End of current block
                 return py_lines, idx + 1
             
             if line.endswith('{'):
-                # Start of a sub-block: "if condition {" or "else {"  or "for x in y {"
-                header = line[:-1].strip()  # remove the {
-                
-                # Collect inner block lines until matching }
+                header = line[:-1].strip()
                 inner_lines, idx = convert_block(lines, idx + 1)
                 
                 if inner_lines:
-                    # Join inner lines with ; for single-line block
                     inner_joined = '; '.join(inner_lines)
                     py_lines.append(f"{header}: {inner_joined}")
                 else:
@@ -486,11 +474,9 @@ def handle_python_def(line, program_iter, python_functions):
         
         return py_lines, idx
     
-    # Normalize raw_body to ensure } are on their own lines for correct block parsing
     normalized_body = []
     for line in raw_body:
         s = line.strip()
-        # Handle } at the start (e.g. "} elif ... {" -> "}", "elif ... {")
         while s.startswith('}'):
             normalized_body.append('}')
             s = s[1:].strip()
@@ -499,7 +485,6 @@ def handle_python_def(line, program_iter, python_functions):
             continue
         
         if s.endswith('}') and not s.startswith('{'):
-            # Avoid splitting "}" if it is just "}" (already handled by startswith but good for safety)
             if len(s) > 1:
                 normalized_body.append(s[:-1].strip())
                 normalized_body.append('}')
@@ -508,8 +493,6 @@ def handle_python_def(line, program_iter, python_functions):
         normalized_body.append(s)
 
     converted_lines, _ = convert_block(normalized_body, 0)
-    
-    # Build final Python source with proper indentation
     func_src = f"def {func_name}({', '.join(func_args)}):\n"
     if not converted_lines:
         func_src += '    pass\n'
@@ -555,7 +538,6 @@ def handle_repeat_command(line, program_iter):
         raise ValueError(f"Invalid repeat syntax: {line}")
     count_expr = m.group(1).strip()
     try:
-        # Evaluate expr using vars_dict
         eval_scope = vars_dict.copy()
         eval_scope['py'] = PyNamespace(PYTHON_FUNCTIONS)
         count = eval(count_expr, {"py": eval_scope.get('py')}, eval_scope)
@@ -564,7 +546,6 @@ def handle_repeat_command(line, program_iter):
     except Exception as e:
         raise ValueError(f"Error evaluating repeat count '{count_expr}': {e}")
     
-    # Collect lines until matching }
     body_items = []
     depth = 1
     
@@ -572,8 +553,7 @@ def handle_repeat_command(line, program_iter):
          raise ValueError("repeat command requires an iterator")
 
     for item in program_iter:
-        # Determine content type
-        if isinstance(item, tuple) and len(item) == 2: # enumerate
+        if isinstance(item, tuple) and len(item) == 2:
              _, raw_line = item
              content = raw_line
         elif isinstance(item, dict):
@@ -600,9 +580,7 @@ def handle_repeat_command(line, program_iter):
         depth += open_count - close_count
         body_items.append(item)
     
-    # Process the body lines 'count' times
     for i in range(count):
-        # Create a fresh iterator for the body for each repetition
         body_iter = iter(body_items)
         for item in body_iter:
             if isinstance(item, tuple) and len(item) == 2:
@@ -619,16 +597,11 @@ def handle_repeat_command(line, program_iter):
 
 def handle_eval_expression(line):
     expr = line[5:-1].strip()
-
-    # Step 1: Expand variables from vars_dict into the expression
     expanded_expr = expr
     for var_name, var_value in vars_dict.items():
         pattern = r'\b' + re.escape(var_name) + r'\b'
         expanded_expr = re.sub(pattern, str(var_value), expanded_expr)
-
-    # Step 2: Xử lý eval lồng nhau (đệ quy)
     def eval_nested(s, eval_scope):
-        # Tìm tất cả eval(...) lồng nhau và thay thế bằng kết quả tính toán
         pattern = re.compile(r'\beval\(([^()]*(?:\([^()]*\)[^()]*)*)\)')
         while 'eval(' in s:
             matches = list(pattern.finditer(s))
@@ -636,14 +609,12 @@ def handle_eval_expression(line):
                 break
             for m in reversed(matches):
                 inner = m.group(1)
-                # Đệ quy xử lý tiếp bên trong, truyền eval_scope
                 inner_result = eval_nested(inner.strip(), eval_scope)
 
                 if 'adr(' in inner_result:
                     replacement = f'({inner_result})'
                     s = s[:m.start()] + replacement + s[m.end():]
                     continue
-
                 try:
                     val = eval(inner_result, {"py": eval_scope.get('py')}, eval_scope)
                 except Exception as e:
@@ -658,35 +629,23 @@ def handle_eval_expression(line):
                     raise ValueError(f"Unsupported nested eval result type: {type(val)}")
                 s = s[:m.start()] + val_str + s[m.end():]
         return s
-
-    # Step 3: Build eval scope with special values
     eval_scope = {}
     eval_scope['pr_length'] = len(result)
     eval_scope['py'] = PyNamespace(PYTHON_FUNCTIONS)
-    # Thêm các biến hiện tại vào scope
     for k, v in vars_dict.items():
         eval_scope[k] = v
-
     expanded_expr = eval_nested(expanded_expr, eval_scope)
-
-    # Step 3: If expression contains adr(), defer evaluation to later
     if 'adr(' in expanded_expr:
         deferred_evals.append((len(result), expanded_expr))
         result.extend((0, 0))
         return
-
-    # Step 4: Build eval scope with special values
     eval_scope = {}
     eval_scope['pr_length'] = len(result)
     eval_scope['py'] = PyNamespace(PYTHON_FUNCTIONS)
-
-    # Step 5: Evaluate the expanded expression
     try:
         val = eval(expanded_expr, {"py": eval_scope.get('py')}, eval_scope)
     except Exception as e:
         raise ValueError(f"Eval error in '{expr}' (expanded: '{expanded_expr}'): {e}")
-
-    # Step 6: Process the result back through process_line
     if isinstance(val, int):
         process_line(f'0x{val:x}')
     elif isinstance(val, str):
@@ -699,6 +658,70 @@ def handle_eval_expression(line):
                 process_line(f'"{item}"')
     else:
         raise ValueError(f"Unsupported eval result type: {type(val)}")
+    
+def handle_find_gadgets_command(line, program_iter):
+    """
+    Syntax:
+        find_gadgets {
+            gadget1
+            gadget2
+            ...
+        }
+    """
+    global disas_filename
+    gadgets = []
+    depth = 1
+    current_gadget = []
+    
+    for item in program_iter:
+        if isinstance(item, tuple) and len(item) == 2:
+            _, raw_line = item
+            content = raw_line
+        elif isinstance(item, dict):
+            content = item.get("exec", "")
+        elif isinstance(item, str):
+            content = item
+        else:
+            content = str(item)
+        
+        content_strip = content.split('---')[0].strip()
+        
+        if not content_strip:
+            if current_gadget:
+                gadgets.append(current_gadget)
+                current_gadget = []
+            continue
+        open_count = content_strip.count('{')
+        close_count = content_strip.count('}')
+        if content_strip == '}':
+            depth -= 1
+            if depth <= 0:
+                break
+            current_gadget.append(content_strip)
+            continue
+        current_gadget.append(content_strip)
+        depth += open_count - close_count
+    
+    if current_gadget:
+        gadgets.append(current_gadget)
+
+    disas_file = disas_filename
+    if not disas_file or not os.path.exists(disas_file):
+        raise ValueError(f"Disassembly file not found...")
+    
+    for gadget_lines in gadgets:
+        if isinstance(gadget_lines, list):
+            instructions = [g for g in gadget_lines if g]
+        else:
+            instructions = [gadget_lines]
+        try:
+            adr = find_first_gadget(instructions, disas_file)
+            if adr is None:
+                raise ValueError("No matching gadget found")
+            process_line(f'call {adr}')
+            print(f"Gadget found at {adr}: {'; '.join(instructions)}")
+        except Exception as e:
+            raise ValueError(f"Error finding gadget '{' | '.join(instructions)}': {e}")
 
 def handle_hex_data(line):
     """Syntax: 
@@ -734,7 +757,6 @@ def handle_call_command(line):
                 note(tag + '\n')
 
     assert 0 <= adr <= max_call_adr, f'Invalid address: {adr}'
-    adr = optimize_adr_for_npress(adr)
     try:
         if home >= 0xd180 and home < 0xd247:
             process_line(f'0x{adr + 0x30300000:0{8}x}')
@@ -808,7 +830,6 @@ def handle_assignment_command(line):
         process_line(value)
         assert len(result) - l1 == sizeof_register(register), f'Line {line!r} source/destination target mismatches'
     else:
-        # Non-prefixed variable assignment
         val = try_eval(right)
         vars_dict[left] = val
 
@@ -866,7 +887,7 @@ def handle_any_string_command(line):
         return process_line(f"eval({m.group(1)})") or ''
     content = re.sub(r'\{([a-zA-Z_]\w*)\}', replace_calc, content)
     content=content.encode("latin1").decode("utf-8")
-    print("Processing string:", content.replace('~', ' '))
+    note(f"Processing string: {content.replace('~', ' ')}\n")
     processed_text = re.sub(r"\s", "~", content)
     for c in processed_text:
         try:
@@ -895,6 +916,10 @@ def dispatch_command_handler(line, program_iter=None, defined_functions=None):
         if program_iter is None:
             raise ValueError("Repeat handling requires program_iter")
         handle_repeat_command(line, program_iter)
+    elif line_strip.startswith('find_gadgets ') or line_strip.startswith('find_gadgets{'):
+        if program_iter is None:
+            raise ValueError("find_gadgets handling requires program_iter")
+        handle_find_gadgets_command(line, program_iter)
     elif line_strip.startswith('py.'): handle_python_call(line_strip)
     elif line.startswith('0x') or (line.startswith('hex') and 'hex_' not in line): handle_hex_data(line)
     elif (line.startswith('eval(') or line.startswith('calc(')) and line.endswith(')'): handle_eval_expression(line)
@@ -954,7 +979,7 @@ def finalize_processing():
         
         if op == '+':
             result_addr = (left_addr + right_addr) & 0xFFFF
-        else: # op == '-'
+        else:
             result_addr = (left_addr - right_addr) & 0xFFFF
         
         if result[pos] != 0 or result[pos+1] != 0:

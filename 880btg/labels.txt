@@ -1,0 +1,69 @@
+24172		strcpy
+466F0		strcat
+34AC2		memcpy
+39D64		memzero
+2A576		memset
+3A2D4		strlen
+06F8A		memmove
+
+349F8		smart_strcpy
+2F7D8		smart_strcat
+41B82		smart_strlen_n
+1EFBA		smart_memcpy
+
+23D40		strcpy_rn
+335EA		memcpy_rn
+
+47C9C		getkey
+31AFA		getkeycode
+494DC		getscancode
+39AC2		cvt_key
+06E9E		zero_KO
+48302		zero_KI
+
+18F1A		buffer_clear.ca54
+18F36		buffer_clear.d654
+
+42994		render
+46334		render.ca54
+07E60		render_bitmap
+
+1FABC		print_line
+395A6		line_print
+1FAC2		smallprint
+1FAC8		scaleprint
+
+1EC60		draw_byte
+3A1D6		fill_draw
+09CFA		line_draw
+45914		pixel_draw
+0A41C		frame_draw
+
+0919E		ENTER
+091A6		LEAVE
+
+06DC0		delay
+06F04		_start
+39442		main
+
+240DE		basen_base_print
+
+09D7E		diagnostic_wait_key
+395BC		diag_scr_fill_ws
+23136		diag_calc_checksum
+2B8DC		diag_waitkey__
+332B2		diag_contrast
+0A476		diagnostic
+2DDE4		mode_diagnostic
+3C2CA		fill_screen
+3AF54		shutdown
+23126		store_reg_to_stack
+24F32		diag_checksum
+30F26		diag_serial_num
+4B694		diag_scr_ckb_ws
+24CAA		check_any_key_pressed__
+
+17148		byte_hex 	# [ea] = input, [er12]= output, er10 = length
+
+# ========= Data labels (also see the cheat table)
+d_05C9E		base_N_keycode

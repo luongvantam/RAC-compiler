@@ -1,0 +1,14 @@
+---syntax---
+str "{string}"
+---logic---
+---output---
+"{string}"
+---
+
+---syntax---
+pop{reg}({value})
+---logic---
+---output---
+pop {reg}
+{value}
+---
