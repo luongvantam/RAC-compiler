@@ -199,7 +199,21 @@ hex 00 00
 
 ---
 
-## 16. Extension System
+## 16. Find_gadgets
+
+Search for suitable gadgets.
+
+```rsc
+find_gadgets {
+  mov er{a[1]}, er{b[1]}
+  pop pc
+}
+```
+Use {var} to specify a hypothetical variable with a value from 0 to 15, {var[1]} to specify a hypothetical variable from 0 to 9.
+
+---
+
+## 17. Extension System
 
 You can define new syntax and macros via `extensions.txt`.
 
@@ -216,7 +230,7 @@ call print
 
 ---
 
-## 17. Full Example
+## 18. Full Example
 
 ```rsc
 org 0xe9e0

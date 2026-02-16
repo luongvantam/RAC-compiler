@@ -197,7 +197,21 @@ hex 00 00
 
 ---
 
-## 16. Hệ thống mở rộng (Extension)
+## 16. Find_gadgets
+
+Tìm kiếm gadgets phù hợp
+
+```rsc
+find_gadgets {
+  mov er{a[1]}, er{b[1]}
+  pop pc
+}
+```
+Dùng {var} để nêu ra 1 biến giả định có giá trị từ 0 đến 15, {var[1]} để nêu ra 1 biến giả định từ 0 đến 9.
+
+---
+
+## 17. Hệ thống mở rộng (Extension)
 
 Bạn có thể định nghĩa cú pháp mới, macro qua `extensions.txt`.
 
@@ -214,7 +228,7 @@ call print
 
 ---
 
-## 17. Ví dụ hoàn chỉnh
+## 18. Ví dụ hoàn chỉnh
 
 ```rsc
 org 0xe9e0
